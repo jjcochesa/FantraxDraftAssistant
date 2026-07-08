@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+.env
+.streamlit/secrets.toml
+# Keep data/pl_stats_2025.json — the harvested permanent cache
