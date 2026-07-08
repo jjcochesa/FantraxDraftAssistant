@@ -34,24 +34,41 @@ POSITION_ORDER = ["G", "D", "M", "F"]
 SLEEPER_API   = "https://api.sleeper.app/v1"
 SLEEPER_SPORT = "clubsoccer:epl"
 
-# Fantrax stat → candidate Sleeper season-stat field codes (first present wins).
-# Sleeper is the same Opta feed Fantrax scores on and, unlike API-Football,
-# exposes real tackles WON (tkw) plus the defensive stats API-Football's season
-# aggregate lacks. Codes are taken from the reference Sleeper assistant, whose
-# totals matched Sleeper's own points exactly; non-colliding alternates are
-# added as fallbacks. NOTE: `cos` = clean sheets in Sleeper's API (not dribbles —
-# that's Fantrax's display code); dribbles are `drb`.
-_SLEEPER_FIELD: dict[str, list[str]] = {
-    "tackles_won":         ["tkw"],
-    "interceptions":       ["int"],
-    "blocked_shots":       ["bs"],
-    "accurate_crosses":    ["acnc", "ac"],
-    "clean_sheets":        ["cos", "cs"],
-    "successful_dribbles": ["drb"],
-    "aerials_won":         ["aer"],
-    "clearances":          ["clr"],
-    "dispossessed":        ["dis"],
-    "own_goals":           ["og"],
+# Fantrax stat → Sleeper season-stat JSON key. Sleeper is the same Opta feed
+# Fantrax scores on and carries every stat Fantrax uses, so matched players are
+# scored entirely from Sleeper (unmatched fall back to API-Football).
+#
+# These keys are DATA-VERIFIED against the live endpoint (dumped every numeric
+# field's player-count + max across all ~537 rows). Two traps to remember:
+#   • `cos` = successful dribbles (Opta "Contests Succeeded"), NOT clean sheets.
+#     Clean sheets is `cs`. Sleeper's UI glossary abbreviations differ from its
+#     JSON keys — do not trust the glossary, only the raw keys.
+#   • `drb` and `ac` are empty in the data; the real keys are `cos` and `acnc`.
+_SLEEPER_FIELD: dict[str, str] = {
+    "goals":               "g",
+    "assists":             "at",
+    "shots_on_target":     "sot",
+    "key_passes":          "kp",
+    "successful_dribbles": "cos",    # NOT drb (empty)
+    "accurate_crosses":    "acnc",   # NOT ac (empty)
+    "aerials_won":         "aer",
+    "clearances":          "clr",
+    "saves":               "sv",
+    "clean_sheets":        "cs",     # NOT cos (that's dribbles)
+    "high_claims":         "hcs",
+    "smothers":            "sm",
+    "tackles_won":         "tkw",    # real tackles-won; no ×proxy needed
+    "interceptions":       "int",
+    "blocked_shots":       "bs",
+    "goals_against":       "ga",
+    "own_goals":           "og",
+    "penalties_missed":    "pkm",
+    "penalties_saved":     "pks",
+    "penalty_drawn":       "pkd",
+    "yellow_card":         "yc",
+    "red_card":            "rc",
+    "second_yellow":       "yc2",    # folded into red_card (a red in Fantrax)
+    "minutes":             "min",
 }
 
 # ---------------------------------------------------------------------------
@@ -258,20 +275,14 @@ def get_sleeper_season_stats(year: int = 2025) -> dict:
     return _get(f"{SLEEPER_API}/stats/{SLEEPER_SPORT}/regular/{year}")
 
 
-def _sleeper_stat(raw: dict, fantrax_stat: str) -> Optional[float]:
-    """Pull a Fantrax stat from a Sleeper record via candidate field codes."""
-    for code in _SLEEPER_FIELD.get(fantrax_stat, []):
-        if code in raw and raw[code] is not None:
-            return _num(raw[code])
-    return None
-
-
 def build_sleeper_lookup(players: dict, season_stats: dict) -> dict[str, dict]:
-    """Return {norm_name: {fantrax_stat: value}} for the defensive/gap stats we
-    override from Sleeper. Also indexes a ``__last__<lastname>`` fallback key.
+    """Return {norm_name: {fantrax_stat: value}} of Sleeper's raw stats for each
+    real player. Also indexes a ``__last__<lastname>`` fallback key.
 
     Matched by name (Sleeper player_id ≠ API-Football id), reusing the same
-    accent-stripping normalisation used everywhere else.
+    accent-stripping normalisation used everywhere else. Team-aggregate/garbage
+    rows in the stats endpoint are skipped because they have no player entry.
+    A second yellow (``yc2``) is folded into ``red_card`` (a red in Fantrax).
     """
     lookup: dict[str, dict] = {}
     for pid, raw in season_stats.items():
@@ -283,11 +294,16 @@ def build_sleeper_lookup(players: dict, season_stats: dict) -> dict[str, dict]:
         )
         if not full_name:
             continue
-        vals = {stat: v for stat in _SLEEPER_FIELD
-                if (v := _sleeper_stat(raw, stat)) is not None}
+        vals: dict[str, float] = {}
+        for stat, code in _SLEEPER_FIELD.items():
+            v = raw.get(code)
+            if v is not None:
+                vals[stat] = _num(v)
         if not vals:
             continue
-        vals["minutes"] = _num(raw.get("min"))
+        if "second_yellow" in vals:
+            vals["red_card"] = vals.get("red_card", 0.0) + vals.pop("second_yellow")
+        vals.setdefault("minutes", 0.0)
         key = _norm_name(full_name)
         prev = lookup.get(key)
         if prev is None or vals["minutes"] >= prev.get("minutes", 0):

@@ -48,13 +48,17 @@ projected 26/27   = blended_PPG · 34 · participation
 | FPL `bootstrap-static` | cost, ownership (ADP proxy), club, clean-sheet fallback | never FPL points or FPL positions |
 | Fantrax `fxpa/req` | live player pool + draft picks | best-effort, needs a session cookie in `st.secrets["fantrax_cookie"]` |
 
-**Notes on stat sourcing:** Sleeper supplies the real Opta defensive stats
-(crucially tackles *won*, not API-Football's total-tackle proxy). Players not
-found in Sleeper fall back to the API-Football total-tackle proxy, discounted by
-the sidebar **tackle-won rate** (default 0.65). Field codes are taken from the
-reference Sleeper assistant (`cos` = clean sheets, `drb` = dribbles, `acnc` =
-crosses in Sleeper's API); if a deployed player's clean-sheet/tackle numbers
-look off, verify the Sleeper field codes against the live API.
+**Notes on stat sourcing:** for players matched in Sleeper (by name), the entire
+Fantrax score is computed from Sleeper's raw Opta stats — the same feed Fantrax
+uses — including real tackles *won* (`tkw`). Only players *not* found in Sleeper
+fall back to API-Football, whose total-tackle proxy is discounted by the sidebar
+**tackle-won rate** (default 0.65).
+
+Sleeper's JSON keys are data-verified against the live endpoint and differ from
+its UI glossary abbreviations. Two traps: `cos` is **successful dribbles** (Opta
+"Contests Succeeded"), not clean sheets — clean sheets is `cs`; and `drb`/`ac`
+are empty (the real keys are `cos`/`acnc`). The full crosswalk lives in
+`_SLEEPER_FIELD` in `draft_engine.py`.
 
 ## Run locally
 
