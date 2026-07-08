@@ -22,7 +22,8 @@ from draft_engine import (
     FantraxAPI,
     POSITION_ORDER,
     _norm_name,
-    fetch_player_db,
+    build_from_sources,
+    fetch_sources,
 )
 
 # ---------------------------------------------------------------------------
@@ -46,8 +47,15 @@ POS_LABELS = {"G": "GK", "D": "DEF", "M": "MID", "F": "FWD"}
 # ---------------------------------------------------------------------------
 
 @st.cache_data(ttl=3600, show_spinner="Loading player database…")
-def _load_player_db() -> dict:
-    return fetch_player_db()
+def _load_sources() -> dict:
+    """Slow network fetch (bundled stats + FPL) — cached for an hour."""
+    return fetch_sources()
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _build_db(tackle_win_rate: float) -> dict:
+    """Cheap re-score keyed on the tackle-win rate (sources are cached)."""
+    return build_from_sources(_load_sources(), tackle_win_rate)
 
 
 @st.cache_resource(show_spinner="Preparing draft…")
@@ -62,20 +70,6 @@ def _auto_dp_score(p: dict) -> float:
     if proj > 0:
         return proj
     return (p.get("ownership_pct") or 0.0) - 1000.0
-
-
-# Load the (cached) player DB up front so DP-text mutations can happen BEFORE
-# the text_area widget is instantiated — Streamlit forbids writing to a
-# widget-backed session_state key after its widget exists.
-player_db = _load_player_db()
-
-if st.session_state.pop("_trigger_auto_dp", False):
-    ranked = sorted(player_db["player_data"].values(), key=_auto_dp_score, reverse=True)
-    st.session_state["dp_rankings_text"] = "\n".join(
-        p["name"] for p in ranked[:150] if p.get("name")
-    )
-if st.session_state.pop("_trigger_clear_dp", False):
-    st.session_state["dp_rankings_text"] = ""
 
 
 # ---------------------------------------------------------------------------
@@ -94,6 +88,26 @@ with st.sidebar:
                                  value=16, step=1)
     my_slot = st.number_input("My draft slot", min_value=1, max_value=int(num_teams),
                               value=1, step=1)
+
+    tackle_win_rate = st.slider(
+        "Tackle-won rate", min_value=0.50, max_value=1.00, value=0.65, step=0.05,
+        help="API-Football gives total tackles, but Fantrax scores tackles WON. "
+             "This discounts them (≈0.65 league average). Set to 1.00 to score "
+             "total tackles unchanged.",
+    )
+
+    # Build the DB now (cheap; sources are cached) so DP-text mutations can run
+    # BEFORE the text_area widget — Streamlit forbids writing a widget-backed
+    # session_state key after its widget exists.
+    player_db = _build_db(tackle_win_rate)
+
+    if st.session_state.pop("_trigger_auto_dp", False):
+        ranked = sorted(player_db["player_data"].values(), key=_auto_dp_score, reverse=True)
+        st.session_state["dp_rankings_text"] = "\n".join(
+            p["name"] for p in ranked[:150] if p.get("name")
+        )
+    if st.session_state.pop("_trigger_clear_dp", False):
+        st.session_state["dp_rankings_text"] = ""
 
     st.divider()
 
@@ -283,12 +297,13 @@ with tab_ranks:
                      height=min(36 * len(df) + 40, 720))
 
     st.caption(
-        "**26/27 Proj** = Bayesian-blended PPG (player + position prior) × 34 GWs "
-        "× participation rate · min 15 GWs required. **ADP / Own%** = FPL 25/26 "
-        "ownership proxy (community consensus, not Fantrax scoring) until Fantrax "
-        "community drafts open in August. Clean sheets / aerials / crosses / "
-        "dispossessed are limited in the season-aggregate source, so GK & DEF "
-        "totals are conservative pre-draft."
+        f"**26/27 Proj** = Bayesian-blended PPG (player + position prior) × 34 GWs "
+        f"× participation rate · min 15 GWs required. Tackles discounted to "
+        f"~{tackle_win_rate:.0%} (tackles-won estimate; adjust in sidebar). "
+        f"**ADP / Own%** = FPL 25/26 ownership proxy (community consensus, not "
+        f"Fantrax scoring) until Fantrax community drafts open in August. Clean "
+        f"sheets / aerials / crosses / dispossessed are limited in the season-"
+        f"aggregate source, so GK & DEF totals are conservative pre-draft."
     )
 
 
