@@ -43,14 +43,18 @@ projected 26/27   = blended_PPG · 34 · participation
 
 | Source | Used for | Notes |
 | --- | --- | --- |
-| API-Football (bundled JSON) | canonical pool, season stats, starter rate | harvested 2025/26 PL — re-harvest closer to kickoff once transfers settle |
-| FPL `bootstrap-static` | cost, ownership (ADP proxy), club, clean-sheet gap-fill | never FPL points or FPL positions |
+| API-Football (bundled JSON) | canonical pool, position, starter rate, attacking stats (goals/assists/SoT/KP) | harvested 2025/26 PL — re-harvest closer to kickoff once transfers settle |
+| Sleeper `stats/clubsoccer:epl` | tackles **won**, interceptions, blocks, accurate crosses, clean sheets, aerials, clearances, dispossessed, own goals | free, no key; same Opta feed Fantrax scores on — overrides API-Football's defensive/gap stats by name match |
+| FPL `bootstrap-static` | cost, ownership (ADP proxy), club, clean-sheet fallback | never FPL points or FPL positions |
 | Fantrax `fxpa/req` | live player pool + draft picks | best-effort, needs a session cookie in `st.secrets["fantrax_cookie"]` |
 
-**Known pre-draft limitation:** clean sheets and own goals are back-filled from
-FPL; aerials won, accurate crosses, clearances and dispossessed are not in the
-season-aggregate source and default to 0, so GK/DEF totals are conservative
-until the Fantrax pool (with Fantrax's own stat totals) is connected.
+**Notes on stat sourcing:** Sleeper supplies the real Opta defensive stats
+(crucially tackles *won*, not API-Football's total-tackle proxy). Players not
+found in Sleeper fall back to the API-Football total-tackle proxy, discounted by
+the sidebar **tackle-won rate** (default 0.65). Field codes are taken from the
+reference Sleeper assistant (`cos` = clean sheets, `drb` = dribbles, `acnc` =
+crosses in Sleeper's API); if a deployed player's clean-sheet/tackle numbers
+look off, verify the Sleeper field codes against the live API.
 
 ## Run locally
 
