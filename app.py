@@ -90,10 +90,11 @@ with st.sidebar:
                               value=1, step=1)
 
     tackle_win_rate = st.slider(
-        "Tackle-won rate", min_value=0.50, max_value=1.00, value=0.65, step=0.05,
-        help="API-Football gives total tackles, but Fantrax scores tackles WON. "
-             "This discounts them (≈0.65 league average). Set to 1.00 to score "
-             "total tackles unchanged.",
+        "Tackle-won rate (fallback)", min_value=0.50, max_value=1.00, value=0.65,
+        step=0.05,
+        help="Players matched in Sleeper use real tackles-WON directly. This only "
+             "affects players NOT found in Sleeper, discounting API-Football's "
+             "total tackles (≈0.65 league average). Set to 1.00 to use totals.",
     )
 
     # Build the DB now (cheap; sources are cached) so DP-text mutations can run
@@ -166,15 +167,23 @@ if dp_text.strip():
 with status_slot.container():
     stats_icon = "✅" if ds.stats_loaded else "⚠️"
     fpl_icon = "✅" if ds.fpl_loaded else "⚠️"
+    slp_icon = f"✅ {ds.sleeper_matched}" if ds.sleeper_loaded else "⚠️"
     dp_icon = f"✅ {len(dp_lookup)}" if dp_lookup else "—"
     st.caption(
         f"Stats {stats_icon} {player_db.get('num_players', 0)}  ·  "
-        f"FPL {fpl_icon}  ·  DP {dp_icon}"
+        f"Sleeper {slp_icon}  ·  FPL {fpl_icon}  ·  DP {dp_icon}"
     )
+    if not ds.sleeper_loaded:
+        st.caption(
+            "⚠️ Sleeper not reachable — falling back to the API-Football tackle "
+            "proxy (tune with the tackle-won rate) and FPL clean-sheet gap-fill."
+        )
+        if ds.sleeper_error:
+            with st.expander("Sleeper error"):
+                st.code(ds.sleeper_error, language=None)
     if not ds.fpl_loaded:
         st.caption(
-            "⚠️ FPL not reachable — cost, ownership (ADP proxy) and clean-sheet "
-            "gap-fill are unavailable, so GK/DEF projections are conservative."
+            "⚠️ FPL not reachable — cost and ownership (ADP proxy) are unavailable."
         )
         if ds.fpl_error:
             with st.expander("FPL error"):
@@ -298,12 +307,12 @@ with tab_ranks:
 
     st.caption(
         f"**26/27 Proj** = Bayesian-blended PPG (player + position prior) × 34 GWs "
-        f"× participation rate · min 15 GWs required. Tackles discounted to "
-        f"~{tackle_win_rate:.0%} (tackles-won estimate; adjust in sidebar). "
-        f"**ADP / Own%** = FPL 25/26 ownership proxy (community consensus, not "
-        f"Fantrax scoring) until Fantrax community drafts open in August. Clean "
-        f"sheets / aerials / crosses / dispossessed are limited in the season-"
-        f"aggregate source, so GK & DEF totals are conservative pre-draft."
+        f"× participation rate · min 15 GWs required. Tackles won, interceptions, "
+        f"blocks, crosses, clean sheets, aerials & dispossessed come from Sleeper "
+        f"(same Opta feed as Fantrax); unmatched players fall back to the "
+        f"API-Football tackle proxy at ~{tackle_win_rate:.0%}. **ADP / Own%** = "
+        f"FPL 25/26 ownership proxy (community consensus) until Fantrax community "
+        f"drafts open in August."
     )
 
 
