@@ -207,6 +207,17 @@ def _apif_to_fantrax_stats(rec: dict, tackle_win_rate: float = 0.65) -> dict:
     }
 
 
+# Fantrax scoring stats that API-Football's season aggregate genuinely provides
+# (clean_sheets/own_goals are placeholders, not real API-Football values). Used
+# for per-stat provenance in the debug view.
+_APIF_PROVIDED = {
+    "goals", "assists", "shots_on_target", "key_passes", "successful_dribbles",
+    "tackles_won", "interceptions", "blocked_shots", "penalty_drawn",
+    "penalties_missed", "penalties_saved", "saves", "goals_against",
+    "yellow_card", "red_card",
+}
+
+
 def _calc_pts(stats: dict, position: str) -> float:
     """Fantrax fantasy points for a raw-stat dict at a given position."""
     pos = position.upper()
@@ -283,8 +294,13 @@ def build_sleeper_lookup(players: dict, season_stats: dict) -> dict[str, dict]:
     accent-stripping normalisation used everywhere else. Team-aggregate/garbage
     rows in the stats endpoint are skipped because they have no player entry.
     A second yellow (``yc2``) is folded into ``red_card`` (a red in Fantrax).
+
+    ``__last__`` entries carry ``_ambiguous=True`` when more than one distinct
+    Sleeper player shares that surname (the highest-minutes one wins the key), so
+    a last-name-only join to it is flagged as higher risk in the debug view.
     """
     lookup: dict[str, dict] = {}
+    last_players: dict[str, set] = {}  # lastname → distinct full-name norms
     for pid, raw in season_stats.items():
         info = players.get(pid) or {}
         full_name = (
@@ -310,10 +326,15 @@ def build_sleeper_lookup(players: dict, season_stats: dict) -> dict[str, dict]:
             lookup[key] = vals
         last = _norm_name(info.get("last_name") or "")
         if last:
+            last_players.setdefault(last, set()).add(key)
             lk = f"__last__{last}"
             prevl = lookup.get(lk)
             if prevl is None or vals["minutes"] >= prevl.get("minutes", 0):
                 lookup[lk] = vals
+    # Flag surnames shared by more than one player.
+    for last, names in last_players.items():
+        if len(names) > 1:
+            lookup[f"__last__{last}"]["_ambiguous"] = True
     return lookup
 
 
@@ -358,26 +379,44 @@ def build_player_stats(
 
         stats = _apif_to_fantrax_stats(rec, tackle_win_rate)
 
-        # Sleeper override — real Opta defensive stats (name-matched; the
-        # abbreviated API-Football first name means the lastname key does the work).
+        # Sleeper override — real Opta stats (name-matched; the abbreviated
+        # API-Football first name means the lastname key usually does the work).
         sl = sleeper_lookup.get(_norm_name(rec.get("norm_name") or rec.get("name") or ""))
+        match_type = "full" if sl else "none"
+        ambiguous_last = False
         if not sl and last:
             sl = sleeper_lookup.get(f"__last__{last}")
+            if sl:
+                match_type = "lastname"
+                ambiguous_last = bool(sl.get("_ambiguous"))
         if sl:
             for stat, v in sl.items():
-                if stat != "minutes":
+                if stat != "minutes" and not stat.startswith("_"):
                     stats[stat] = v
 
-        # FPL fills only what Sleeper didn't provide.
+        # FPL fills only what Sleeper didn't provide (track what it supplied).
+        fpl_filled: set[str] = set()
         if fpl:
             if "clean_sheets" not in (sl or {}):
-                stats["clean_sheets"] = fpl["clean_sheets"]
+                stats["clean_sheets"] = fpl["clean_sheets"]; fpl_filled.add("clean_sheets")
             if "own_goals" not in (sl or {}):
-                stats["own_goals"] = fpl["own_goals"]
+                stats["own_goals"] = fpl["own_goals"]; fpl_filled.add("own_goals")
             if not stats["penalties_saved"]:
-                stats["penalties_saved"] = fpl["penalties_saved"]
+                stats["penalties_saved"] = fpl["penalties_saved"]; fpl_filled.add("penalties_saved")
             if not stats["goals_against"]:
-                stats["goals_against"] = fpl["goals_conceded"]
+                stats["goals_against"] = fpl["goals_conceded"]; fpl_filled.add("goals_against")
+
+        # Per-stat provenance for the debug view.
+        provenance: dict[str, str] = {}
+        for stat in FANTRAX_SCORING:
+            if sl and stat in sl:
+                provenance[stat] = "Sleeper"
+            elif stat in fpl_filled:
+                provenance[stat] = "FPL"
+            elif stat in _APIF_PROVIDED:
+                provenance[stat] = "API-Football"
+            else:
+                provenance[stat] = "missing"
 
         total_pts = _calc_pts(stats, pos)
         minutes   = int(_num(rec.get("minutes")))
@@ -385,7 +424,8 @@ def build_player_stats(
         ppg       = round(total_pts / games, 2) if games >= MIN_GW else 0.0
 
         interim.append({"rec": rec, "pos": pos, "fpl": fpl, "stats": stats,
-                        "has_sleeper": bool(sl),
+                        "has_sleeper": bool(sl), "match_type": match_type,
+                        "ambiguous_last": ambiguous_last, "provenance": provenance,
                         "total_pts": total_pts, "minutes": minutes,
                         "games": games, "ppg": ppg})
 
@@ -460,6 +500,10 @@ def build_player_stats(
             "ownership_pct":   fpl["ownership_pct"] if fpl else None,
             "has_fpl":         fpl is not None,
             "has_sleeper":     it["has_sleeper"],
+            "match_type":      it["match_type"],
+            "ambiguous_last":  it["ambiguous_last"],
+            "_provenance":     it["provenance"],
+            "_stats":          {s: round(_num(stats.get(s, 0)), 2) for s in FANTRAX_SCORING},
         }
 
     # ADP proxy rank: community consensus via FPL ownership %.

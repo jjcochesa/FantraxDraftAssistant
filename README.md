@@ -22,6 +22,10 @@ projects 2026/27 fantasy points under Fantrax scoring and helps you draft.
 - **My Team** — drafted squad, positional caps (G3/D8/M8/F6) and best available
   per position.
 - **ADP / Value** — projection rank vs the community ADP proxy.
+- **Data-source debug** (expander under Rankings) — per-player stat provenance
+  (Sleeper / API-Football / FPL / missing), last-name-only matches flagged as
+  higher risk (shared surnames first), and the top unmatched starters by minutes
+  to catch join bugs.
 
 ## How projections work
 
