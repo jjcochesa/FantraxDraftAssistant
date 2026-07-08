@@ -132,7 +132,7 @@ def load_pl_stats(path: str = "data/pl_stats_2025.json") -> list[dict]:
     return json.loads(p.read_text(encoding="utf-8"))
 
 
-def _apif_to_fantrax_stats(rec: dict) -> dict:
+def _apif_to_fantrax_stats(rec: dict, tackle_win_rate: float = 0.65) -> dict:
     """Map an API-Football season record to Fantrax raw-stat inputs.
 
     Stats API-Football's season aggregate does not expose are omitted (they
@@ -147,8 +147,10 @@ def _apif_to_fantrax_stats(rec: dict) -> dict:
         "shots_on_target":     _num(rec.get("shots_on_target")),
         "key_passes":          _num(rec.get("key_passes")),
         "successful_dribbles": _num(rec.get("dribbles_success")),
-        # API-Football reports total tackles, not tackles *won* — best proxy.
-        "tackles_won":         _num(rec.get("tackles_total")),
+        # API-Football reports TOTAL tackles, but Fantrax scores tackles *won*.
+        # Discount by tackle_win_rate (league-average success ≈ 0.65) so high-
+        # volume tacklers aren't over-credited. Set to 1.0 to use totals as-is.
+        "tackles_won":         _num(rec.get("tackles_total")) * tackle_win_rate,
         "interceptions":       _num(rec.get("interceptions")),
         "blocked_shots":       _num(rec.get("tackles_blocks")),
         "penalty_drawn":       _num(rec.get("penalties_won")),
@@ -226,11 +228,15 @@ MIN_GW = 15  # below this, projected_pts = 0 (insufficient sample)
 
 
 def build_player_stats(
-    pl_stats:   list[dict],
-    fpl_lookup: Optional[dict] = None,
+    pl_stats:        list[dict],
+    fpl_lookup:      Optional[dict] = None,
+    tackle_win_rate: float = 0.65,
 ) -> dict[str, dict]:
     """Merge API-Football season stats + FPL gap-fill into enriched records,
     compute Fantrax season points and the 26/27 projection.
+
+    ``tackle_win_rate`` discounts API-Football total tackles toward Fantrax
+    'tackles won' (1.0 = use totals unchanged).
 
     Returns {player_key: record}. player_key is norm_name (unique per record).
     """
@@ -248,7 +254,7 @@ def build_player_stats(
         last = _norm_name(rec.get("lastname") or "")
         fpl  = fpl_lookup.get(last)
 
-        stats = _apif_to_fantrax_stats(rec)
+        stats = _apif_to_fantrax_stats(rec, tackle_win_rate)
         # Fill stats API-Football's season aggregate lacks, from FPL.
         if fpl:
             stats["clean_sheets"] = fpl["clean_sheets"]
@@ -324,7 +330,8 @@ def build_player_stats(
             "shots_on_target": int(stats["shots_on_target"]),
             "key_passes":      int(stats["key_passes"]),
             "successful_dribbles": int(stats["successful_dribbles"]),
-            "tackles_won":     int(stats["tackles_won"]),
+            # Discounted toward tackles-won (see tackle_win_rate); round, don't truncate.
+            "tackles_won":     round(stats["tackles_won"]),
             "interceptions":   int(stats["interceptions"]),
             "blocked_shots":   int(stats["blocked_shots"]),
             "clean_sheets":    int(stats["clean_sheets"]),
@@ -422,18 +429,17 @@ class FantraxAPI:
 
 
 # ---------------------------------------------------------------------------
-# Heavy loader for @st.cache_data
+# Heavy loaders for @st.cache_data
 # ---------------------------------------------------------------------------
 
-def fetch_player_db(stats_path: str = "data/pl_stats_2025.json") -> dict:
-    """Load bundled stats + FPL and build the enriched player DB.
+def fetch_sources(stats_path: str = "data/pl_stats_2025.json") -> dict:
+    """Fetch the slow inputs only: bundled stats + FPL bootstrap.
 
-    Returns a plain dict suitable for @st.cache_data. Network failures (FPL
-    blocked/offline) degrade gracefully — the app still runs off the bundled
-    API-Football stats, minus cost/ownership and clean-sheet gap-fill.
+    Kept separate from scoring so the network fetch can be cached once while
+    cheap re-scoring (e.g. changing the tackle-win rate) runs on every rerun.
+    FPL failures degrade gracefully — the app still runs off the bundled stats.
     """
     pl_stats = load_pl_stats(stats_path)
-    stats_loaded = bool(pl_stats)
 
     fpl_lookup: Optional[dict] = None
     fpl_loaded = False
@@ -444,15 +450,33 @@ def fetch_player_db(stats_path: str = "data/pl_stats_2025.json") -> dict:
     except Exception as exc:  # noqa: BLE001 - surfaced in the UI status line
         fpl_error = str(exc)
 
-    player_data = build_player_stats(pl_stats, fpl_lookup)
-
     return {
-        "player_data":  player_data,
-        "stats_loaded": stats_loaded,
+        "pl_stats":     pl_stats,
+        "fpl_lookup":   fpl_lookup,
+        "stats_loaded": bool(pl_stats),
         "fpl_loaded":   fpl_loaded,
         "fpl_error":    fpl_error,
+    }
+
+
+def build_from_sources(sources: dict, tackle_win_rate: float = 0.65) -> dict:
+    """Build the enriched player DB from cached sources (cheap; rate-dependent)."""
+    player_data = build_player_stats(
+        sources["pl_stats"], sources.get("fpl_lookup"), tackle_win_rate
+    )
+    return {
+        "player_data":  player_data,
+        "stats_loaded": sources["stats_loaded"],
+        "fpl_loaded":   sources["fpl_loaded"],
+        "fpl_error":    sources["fpl_error"],
         "num_players":  len(player_data),
     }
+
+
+def fetch_player_db(stats_path: str = "data/pl_stats_2025.json",
+                    tackle_win_rate: float = 0.65) -> dict:
+    """Convenience: fetch sources + build in one call (used by tests/CLI)."""
+    return build_from_sources(fetch_sources(stats_path), tackle_win_rate)
 
 
 # ---------------------------------------------------------------------------
