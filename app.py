@@ -19,6 +19,7 @@ import streamlit as st
 
 from draft_engine import (
     DraftState,
+    FANTRAX_SCORING,
     FantraxAPI,
     POSITION_ORDER,
     _norm_name,
@@ -255,6 +256,88 @@ def _rankings_column_config(detail: bool) -> dict:
     return cfg
 
 
+# Readable labels for the raw Fantrax scoring stats (debug view).
+STAT_LABELS = {
+    "goals": "Goals", "assists": "Assists", "shots_on_target": "SoT",
+    "key_passes": "Key passes", "successful_dribbles": "Dribbles (CoS)",
+    "accurate_crosses": "Acc. crosses (ACNC)", "penalty_drawn": "Pens drawn",
+    "clean_sheets": "Clean sheets", "tackles_won": "Tackles won",
+    "interceptions": "Interceptions", "blocked_shots": "Blocked shots",
+    "aerials_won": "Aerials won", "clearances": "Clearances", "saves": "Saves",
+    "penalties_saved": "Pens saved", "high_claims": "High claims",
+    "smothers": "Smothers", "goals_against": "Goals against",
+    "yellow_card": "Yellow", "red_card": "Red", "own_goals": "Own goals",
+    "penalties_missed": "Pens missed", "dispossessed": "Dispossessed",
+}
+
+
+def _render_data_source_debug(ds: DraftState) -> None:
+    """Per-player stat provenance, risky name matches, and top unmatched starters."""
+    with st.expander("🔎 Data sources & match quality (debug)", expanded=False):
+        players = list(ds.player_data.values())
+        if not players:
+            st.info("No player data loaded.")
+            return
+
+        full  = sum(1 for p in players if p.get("match_type") == "full")
+        lastn = sum(1 for p in players if p.get("match_type") == "lastname")
+        amb   = sum(1 for p in players if p.get("ambiguous_last"))
+        unm   = [p for p in players if not p.get("has_sleeper")]
+        st.caption(
+            f"Sleeper matches **{len(players) - len(unm)} / {len(players)}**  ·  "
+            f"full-name {full}  ·  last-name {lastn} ({amb} on a shared surname)  ·  "
+            f"unmatched {len(unm)}"
+        )
+        if not ds.sleeper_loaded:
+            st.warning(
+                "Sleeper wasn't loaded this session — provenance below reflects the "
+                "API-Football / FPL fallback, not a live Sleeper join."
+            )
+
+        # 1) Per-player stat provenance
+        pick = st.selectbox("Inspect a player's stat sources",
+                            sorted(p["name"] for p in players), key="_dbg_player")
+        p = next((x for x in players if x["name"] == pick), None)
+        if p:
+            badge = {"full": "✅ full-name", "lastname": "⚠️ last-name only",
+                     "none": "❌ no Sleeper match"}.get(p.get("match_type"), "—")
+            if p.get("ambiguous_last"):
+                badge += "  ·  ⚠️ shared surname"
+            st.markdown(
+                f"**{p['name']}** — {POS_LABELS.get(p['position'])} · {p['team']}  |  "
+                f"Sleeper: {badge}  ·  FPL: {'✅' if p.get('has_fpl') else '—'}"
+            )
+            prov, vals = p.get("_provenance", {}), p.get("_stats", {})
+            rows = [{"Stat": STAT_LABELS.get(s, s), "Value": vals.get(s, 0),
+                     "Source": prov.get(s, "—")} for s in FANTRAX_SCORING]
+            st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch",
+                         height=min(36 * len(rows) + 40, 620))
+
+        # 2) Last-name-only matches (highest risk first: shared surname, then minutes)
+        risky = sorted((p for p in players if p.get("match_type") == "lastname"),
+                       key=lambda x: (not x.get("ambiguous_last"), -x.get("minutes", 0)))
+        if risky:
+            st.markdown("**Last-name-only matches** — verify these (shared-surname first)")
+            st.dataframe(pd.DataFrame([
+                {"Name": p["name"], "Pos": POS_LABELS.get(p["position"]),
+                 "Club": p["team"], "Min": p["minutes"],
+                 "Shared surname": "⚠️" if p.get("ambiguous_last") else ""}
+                for p in risky[:25]
+            ]), hide_index=True, width="stretch")
+
+        # 3) Top unmatched by minutes — a high-minutes miss is a join bug to chase
+        st.markdown("**Top unmatched starters by minutes** (a high-minutes miss = a join bug)")
+        top_unm = sorted(unm, key=lambda x: x.get("minutes", 0), reverse=True)[:10]
+        if top_unm:
+            st.dataframe(pd.DataFrame([
+                {"Name": p["name"], "Pos": POS_LABELS.get(p["position"]),
+                 "Club": p["team"], "Min": p["minutes"]}
+                for p in top_unm
+            ]), hide_index=True, width="stretch")
+        else:
+            st.caption("No unmatched players — every player joined to Sleeper.")
+
+
 # ---------------------------------------------------------------------------
 # Tabs
 # ---------------------------------------------------------------------------
@@ -314,6 +397,8 @@ with tab_ranks:
         f"FPL 25/26 ownership proxy (community consensus) until Fantrax community "
         f"drafts open in August."
     )
+
+    _render_data_source_debug(ds)
 
 
 # ── Live Draft ──────────────────────────────────────────────────────────────
