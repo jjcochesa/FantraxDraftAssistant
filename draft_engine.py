@@ -233,7 +233,86 @@ def _apif_detail(rec: dict) -> dict:
         "saves":               _num(rec.get("saves")),
         "yellow_card":         _num(rec.get("yellow_cards")),
         "red_card":            _num(rec.get("red_cards")) + _num(rec.get("yellowred_cards")),
+        # extras usable for bottom-up scoring / validation
+        "penalty_drawn":       _num(rec.get("penalties_won")),
+        "penalties_missed":    _num(rec.get("penalties_missed")),
+        "penalties_saved":     _num(rec.get("penalties_saved")),
+        "goals_against":       _num(rec.get("goals_conceded")),
     }
+
+
+# ---------------------------------------------------------------------------
+# Bottom-up scoring — raw stats × Fantrax points-per-stat (position-aware).
+# Used to validate the feed against Fantrax's own FPts, and (once validated)
+# to drive the per-stat projection.
+# ---------------------------------------------------------------------------
+
+def score_from_stats(stats: dict, position: str) -> float:
+    """Fantrax fantasy points for a raw-stat dict at a given position.
+
+    ``stats`` is keyed by FANTRAX_SCORING stat names (the keys Sleeper's lookup
+    already uses). Missing stats score 0.
+    """
+    pos = position.upper()
+    pts = 0.0
+    for stat_name, rule in FANTRAX_SCORING.items():
+        val = _num(stats.get(stat_name))
+        if val == 0:
+            continue
+        mult = rule.get(pos, 0) if isinstance(rule, dict) else float(rule)
+        pts += val * mult
+    return round(pts, 2)
+
+
+def validate_scoring(fantrax_players: list[dict], stat_lookup: dict,
+                     source_name: str = "Sleeper") -> dict:
+    """Compare bottom-up points (raw stats × Fantrax scoring) against Fantrax's
+    own FPts for every player that matches ``stat_lookup`` by name.
+
+    Returns a report: n, correlation, MAE, mean signed bias, per-position bias,
+    and the biggest over/under-estimates — so we can prove the feed reproduces
+    Fantrax before trusting a projection built on it.
+    """
+    rows = []
+    for fx in fantrax_players:
+        if fx["total_pts"] <= 0:
+            continue
+        nkey = _norm_name(fx["name"])
+        last = nkey.split()[-1] if nkey else ""
+        sl = stat_lookup.get(nkey) or (stat_lookup.get(f"__last__{last}") if last else None)
+        if not sl:
+            continue
+        calc = score_from_stats(sl, fx["position"])
+        rows.append({"name": fx["name"], "pos": fx["position"],
+                     "fantrax": fx["total_pts"], "calc": calc,
+                     "diff": round(calc - fx["total_pts"], 1)})
+
+    n = len(rows)
+    if n == 0:
+        return {"source": source_name, "n": 0}
+
+    diffs = [r["diff"] for r in rows]
+    fpts  = [r["fantrax"] for r in rows]
+    calcs = [r["calc"] for r in rows]
+    mae   = round(sum(abs(d) for d in diffs) / n, 2)
+    bias  = round(sum(diffs) / n, 2)
+
+    # Pearson correlation
+    mf, mc = sum(fpts) / n, sum(calcs) / n
+    cov = sum((f - mf) * (c - mc) for f, c in zip(fpts, calcs))
+    vf  = sum((f - mf) ** 2 for f in fpts) ** 0.5
+    vc  = sum((c - mc) ** 2 for c in calcs) ** 0.5
+    corr = round(cov / (vf * vc), 4) if vf and vc else None
+
+    pos_bias = {}
+    for pos in POSITION_ORDER:
+        d = [r["diff"] for r in rows if r["pos"] == pos]
+        if d:
+            pos_bias[pos] = round(sum(d) / len(d), 1)
+
+    worst = sorted(rows, key=lambda r: abs(r["diff"]), reverse=True)[:15]
+    return {"source": source_name, "n": n, "correlation": corr, "mae": mae,
+            "bias": bias, "pos_bias": pos_bias, "worst": worst}
 
 
 # ---------------------------------------------------------------------------
@@ -672,8 +751,14 @@ def build_from_sources(sources: dict) -> dict:
         sources["fantrax_players"], sources.get("fpl_lookup"),
         sources.get("sleeper_lookup"), sources.get("apif_lookup"),
     )
+    # Validate the stat feed reproduces Fantrax's own points (Sleeper preferred).
+    validation = None
+    if sources.get("sleeper_lookup"):
+        validation = validate_scoring(
+            sources["fantrax_players"], sources["sleeper_lookup"], "Sleeper")
     return {
         "player_data":     player_data,
+        "validation":      validation,
         "fantrax_loaded":  sources["fantrax_loaded"],
         "apif_loaded":     sources.get("apif_loaded", False),
         "fpl_loaded":      sources["fpl_loaded"],
@@ -721,6 +806,7 @@ class DraftState:
         self.sleeper_error: Optional[str] = None
         self.sleeper_matched = 0
         self.apif_matched    = 0
+        self.validation: Optional[dict] = None
 
         # overall_pick_number → {"key": player_key, "slot": int}
         self.picks: dict[int, dict] = {}
@@ -736,6 +822,7 @@ class DraftState:
         self.sleeper_error   = db.get("sleeper_error")
         self.sleeper_matched = db.get("sleeper_matched", 0)
         self.apif_matched    = db.get("apif_matched", 0)
+        self.validation      = db.get("validation")
 
     # -- board geometry -------------------------------------------------
     @property

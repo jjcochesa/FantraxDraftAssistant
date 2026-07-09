@@ -289,6 +289,23 @@ def _render_data_source_debug(ds: DraftState) -> None:
                 "API-Football. Points, PPG and positions are unaffected (Fantrax)."
             )
 
+        # Scoring-feed validation: bottom-up (Opta stats × Fantrax scoring) vs Fantrax FPts
+        val = ds.validation
+        st.markdown("**Scoring-feed validation** — does raw Opta × Fantrax scoring reproduce Fantrax's FPts?")
+        if not val or not val.get("n"):
+            st.caption("Needs a live Sleeper join (unavailable this session). "
+                       "Run `python validate.py` where Sleeper is reachable.")
+        else:
+            vc1, vc2, vc3 = st.columns(3)
+            vc1.metric("Correlation", val["correlation"])
+            vc2.metric("Mean abs error", f"{val['mae']} pts")
+            vc3.metric("Mean bias", f"{val['bias']:+} pts")
+            st.caption(f"n={val['n']} matched · per-position bias {val['pos_bias']} "
+                       "· high correlation + low bias ⇒ the feed reproduces Fantrax, "
+                       "so a per-stat projection built on it is trustworthy.")
+            with st.expander("Biggest bottom-up vs Fantrax gaps"):
+                st.dataframe(pd.DataFrame(val["worst"]), hide_index=True, width="stretch")
+
         # 1) Per-player detail-stat source
         pick = st.selectbox("Inspect a player's stat sources",
                             sorted(p["name"] for p in players), key="_dbg_player")
