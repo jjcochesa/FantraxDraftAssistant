@@ -31,17 +31,27 @@ projects 2026/27 fantasy points under Fantrax scoring and helps you draft.
 
 **25/26 points, PPG and positions are Fantrax's own final numbers**, read
 straight from the league export (`data/fantrax_players_2025.csv`) — no
-reconstruction, so the ranking table matches Fantrax exactly. `games` is derived
-as `FPts / FP-G`. The 26/27 projection is a Bayesian blend of each player's real
-Fantrax PPG with a position prior, scaled to 34 gameweeks × an availability rate:
+reconstruction, so the ranking table matches Fantrax exactly.
+
+The **26/27 projection is bottom-up / per-stat**. For each player it takes every
+Opta per-90 rate from last season (goals, SoT, KP, tackles won, interceptions,
+clean sheets, …), regresses each rate toward its position mean — *volatile*
+stats (goals, penalties, cards, GK saves) shrink hard, *stable* volume stats
+(tackles, interceptions, aerials, passing actions) barely move — scales to
+expected minutes, and scores the result with Fantrax's rules:
 
 ```
-base PPG          = Fantrax FP/G          (games = FPts / FP-G, require ≥ 15)
-k                 = max(3.0, 40 / sqrt(games))
-blended PPG       = (games·PPG + k·prior_PPG) / (games + k)
-participation     = min(1, games/34) · min(1, starter_rate)   (floored 0.75 if games ≥ 25)
-projected 26/27   = blended_PPG · 34 · participation
+rate_s        = stat_s / (minutes / 90)                        # per-90, last season
+blended_s     = (m90·rate_s + k_s·prior_rate_s) / (m90 + k_s)  # per-stat regression
+expected_90s  = 34 · participation,  participation = min(1, games/34)·min(1, starter_rate)  (floor 0.75 if games≥25)
+projected     = Σ_s  (blended_s · expected_90s) · fantrax_points_per_stat[s, position]
 ```
+
+`k_s` is the per-stat shrinkage in `draft_engine._SHRINK`. The bottom-up scoring
+was validated to reproduce Fantrax's own points (correlation ≈ 0.99 across all
+positions — run `validate.py`). Players without Sleeper stats fall back to a
+PPG-based projection (`proj_ppg`); each player's method is shown in the app's
+debug panel.
 
 ## Data sources
 

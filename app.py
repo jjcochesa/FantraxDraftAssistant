@@ -316,11 +316,17 @@ def _render_data_source_debug(ds: DraftState) -> None:
                      }.get(p.get("match_type"), "—")
             if p.get("ambiguous_last"):
                 badge += "  ·  ⚠️ shared surname"
+            pm = {"per-stat": "per-stat (Sleeper rates)", "ppg": "PPG fallback",
+                  "none": "—"}.get(p.get("proj_method"), "—")
             st.markdown(
                 f"**{p['name']}** — {POS_LABELS.get(p['position'])} · {p['team']} · "
                 f"{p['total_pts']} pts (Fantrax)  |  Sleeper: {badge}  ·  "
                 f"API-Football: {'✅' if p.get('has_apif') else '—'}  ·  "
                 f"FPL: {'✅' if p.get('has_fpl') else '—'}"
+            )
+            st.caption(
+                f"26/27 projection: **{p.get('projected_pts')}** via *{pm}*  ·  "
+                f"top-down PPG model would give {p.get('proj_ppg')}."
             )
             src = p.get("_detail_source", {})
             rows = [{"Stat": STAT_LABELS.get(s, s),
@@ -407,10 +413,13 @@ with tab_ranks:
 
     st.caption(
         "**25/26 Pts / PPG / Pos** are Fantrax's own final totals (from the league "
-        "export). **26/27 Proj** = Bayesian-blended PPG (player + position prior) × "
-        "34 GWs × availability rate · min 15 GWs required. Detail stats come from "
-        "Sleeper (Opta), API-Football fallback. **ADP / Own%** = FPL 25/26 ownership "
-        "proxy (community consensus) until Fantrax community drafts open in August."
+        "export). **26/27 Proj** = per-stat model: each Opta per-90 rate is "
+        "regressed toward its position mean (volatile stats like goals shrink "
+        "harder than stable ones like tackles), scaled to 34 GWs × a starter-rate "
+        "availability term, and scored with Fantrax rules. Players without Sleeper "
+        "stats fall back to a PPG-based projection. Detail stats: Sleeper (Opta), "
+        "API-Football fallback. **ADP / Own%** = FPL ownership proxy until Fantrax "
+        "community drafts open."
     )
 
     _render_data_source_debug(ds)

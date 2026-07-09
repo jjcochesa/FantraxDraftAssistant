@@ -504,6 +504,41 @@ def build_sleeper_lookup(players: dict, season_stats: dict) -> dict[str, dict]:
 
 MIN_GW = 15  # below this, projected_pts = 0 (insufficient sample)
 
+# Per-stat regression strength for the projection (units: 90s of prior sample).
+# A stat with shrink k keeps games/(games+k) of a player's own per-90 rate and
+# pulls the rest to the position mean. Volatile, low-repeatability stats (goals,
+# penalties, cards, GK saves) shrink hard; stable, high-repeatability volume
+# stats (tackles, interceptions, aerials, passing actions) shrink lightly.
+_SHRINK: dict[str, float] = {
+    # volatile → shrink hard toward position mean
+    "goals": 14, "penalty_drawn": 20, "penalties_missed": 20, "penalties_saved": 20,
+    "own_goals": 20, "red_card": 16, "high_claims": 14, "smothers": 16, "saves": 10,
+    # medium
+    "assists": 11, "shots_on_target": 9, "key_passes": 8, "clean_sheets": 9,
+    "blocked_shots": 8, "goals_against": 9,
+    # stable → keep most of the player's own rate
+    "tackles_won": 6, "interceptions": 6, "aerials_won": 6, "clearances": 6,
+    "successful_dribbles": 7, "accurate_crosses": 7, "yellow_card": 8, "dispossessed": 7,
+}
+_SHRINK_DEFAULT = 10.0
+
+
+def _project_per_stat(sl: dict, pos: str, expected_90s: float,
+                      rate_prior: dict) -> float:
+    """Bottom-up 26/27 projection: shrink each per-90 rate toward the position
+    mean (per-stat strength), scale to expected minutes, score with Fantrax."""
+    m90 = _num(sl.get("minutes")) / 90.0
+    if m90 <= 0:
+        return 0.0
+    expected: dict[str, float] = {}
+    for stat in FANTRAX_SCORING:
+        rate = _num(sl.get(stat)) / m90
+        k = _SHRINK.get(stat, _SHRINK_DEFAULT)
+        prior = rate_prior.get(stat, 0.0)
+        blended = (m90 * rate + k * prior) / (m90 + k)
+        expected[stat] = blended * expected_90s
+    return round(score_from_stats(expected, pos), 1)
+
 
 def _detail_source(sl: Optional[dict], apif_rec: Optional[dict]) -> tuple[dict, dict]:
     """Return (values, source) dicts over DETAIL_STATS, preferring Sleeper's real
@@ -574,26 +609,55 @@ def build_player_stats(
         for pos, v in pos_ppg_acc.items()
     }
 
+    # Position mean per-90 rate for every scoring stat, from Sleeper-matched
+    # players with enough minutes — the prior for the per-stat projection.
+    rate_acc = {pos: {s: [] for s in FANTRAX_SCORING} for pos in POSITION_ORDER}
+    for it in interim:
+        sl = it["sl"]
+        if not sl:
+            continue
+        m90 = _num(sl.get("minutes")) / 90.0
+        if m90 < MIN_GW:
+            continue
+        pos = it["fx"]["position"]
+        for s in FANTRAX_SCORING:
+            rate_acc[pos][s].append(_num(sl.get(s)) / m90)
+    rate_prior = {
+        pos: {s: (sum(v) / len(v) if v else 0.0) for s, v in d.items()}
+        for pos, d in rate_acc.items()
+    }
+
     # ------------------------------------------------------------------
     # Pass 3 — projection + final records.
     # ------------------------------------------------------------------
     result: dict[str, dict] = {}
     for it in interim:
-        fx, fpl = it["fx"], it["fpl"]
+        fx, fpl, sl = it["fx"], it["fpl"], it["sl"]
         pos, games, ppg = fx["position"], fx["games"], fx["ppg"]
         starter_rate = it["starter_rate"]
 
+        # Starter-rate-weighted expected minutes (in 90s) for next season.
+        raw_rate = min(1.0, games / 34) * min(1.0, starter_rate)
+        participation = max(0.75, raw_rate) if games >= 25 else raw_rate
+        expected_90s = 34.0 * participation
+
+        # Top-down PPG projection (fallback / comparison).
         if games >= MIN_GW and ppg > 0:
             prior_ppg = pos_avg.get(pos, 8.0)
-            # Adaptive shrinkage: full-season veterans keep ~83% of own PPG;
-            # fringe starters shrink harder toward the position prior.
-            k           = max(3.0, 40.0 / (games ** 0.5))
+            k = max(3.0, 40.0 / (games ** 0.5))
             blended_ppg = (games * ppg + k * prior_ppg) / (games + k)
-            raw_rate    = min(1.0, games / 34) * min(1.0, starter_rate)
-            participation = max(0.75, raw_rate) if games >= 25 else raw_rate
-            projected_pts = round(blended_ppg * 34 * participation, 1)
+            proj_ppg = round(blended_ppg * 34 * participation, 1)
         else:
-            projected_pts = 0.0
+            proj_ppg = 0.0
+
+        # Per-stat projection when Sleeper stats + enough minutes are available.
+        sl_m90 = _num(sl.get("minutes")) / 90.0 if sl else 0.0
+        if sl and sl_m90 >= MIN_GW:
+            projected_pts = _project_per_stat(sl, pos, expected_90s, rate_prior[pos])
+            proj_method = "per-stat"
+        else:
+            projected_pts = proj_ppg
+            proj_method = "ppg" if proj_ppg > 0 else "none"
 
         vals = it["values"]
         key = fx["fantrax_id"] or _norm_name(fx["name"])
@@ -608,6 +672,8 @@ def build_player_stats(
             "rank_ov":         fx["rank_ov"],
             "starter_rate":    round(starter_rate, 3),
             "projected_pts":   projected_pts,
+            "proj_ppg":        proj_ppg,       # top-down comparison
+            "proj_method":     proj_method,    # "per-stat" | "ppg" | "none"
             # Stat-detail columns (Sleeper → API-Football → None)
             "goals":           vals["goals"],
             "assists":         vals["assists"],
