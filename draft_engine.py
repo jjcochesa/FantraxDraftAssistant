@@ -172,6 +172,76 @@ def _num(v) -> float:
         return 0.0
 
 
+# ---------------------------------------------------------------------------
+# Cross-source name matching
+#
+# Fantrax names can be long ("Mateus Gonçalo Espanha Fernandes"), so a bare
+# full-name join misses and a last-name fallback can grab the wrong player
+# (e.g. → Bruno Fernandes). We index each source by full norm name AND a
+# "first + last" variant, and refuse to match on a surname shared by multiple
+# players. Entries need a ``minutes`` field so the busiest player wins a key.
+# ---------------------------------------------------------------------------
+
+def _name_variants(name: str) -> list[str]:
+    """[full norm name, "first last"] — most-specific first, de-duplicated."""
+    n = _norm_name(name)
+    toks = n.split()
+    variants = [n]
+    if len(toks) >= 2:
+        fl = f"{toks[0]} {toks[-1]}"
+        if fl != n:
+            variants.append(fl)
+    return variants
+
+
+def _index_entry(lookup: dict, last_seen: dict, name: str, entry: dict) -> None:
+    """Index ``entry`` by its name variants + ``__last__<surname>`` (busiest
+    wins). ``last_seen`` accumulates distinct full names per surname for the
+    ambiguity flag."""
+    n = _norm_name(name)
+    toks = n.split()
+    mins = entry.get("minutes", 0)
+    for v in _name_variants(name):
+        prev = lookup.get(v)
+        if prev is None or mins >= prev.get("minutes", 0):
+            lookup[v] = entry
+    if toks:
+        last = toks[-1]
+        last_seen.setdefault(last, set()).add(n)
+        lk = f"__last__{last}"
+        prev = lookup.get(lk)
+        if prev is None or mins >= prev.get("minutes", 0):
+            lookup[lk] = entry
+
+
+def _flag_ambiguous(lookup: dict, last_seen: dict) -> None:
+    """Mark ``__last__`` keys whose surname is shared by >1 distinct player."""
+    for last, names in last_seen.items():
+        if len(names) > 1:
+            e = lookup.get(f"__last__{last}")
+            if e is not None:
+                e["_ambiguous"] = True
+
+
+def match_entry(name: str, lookup: dict) -> tuple[Optional[dict], str]:
+    """Return (entry, match_type) for ``name`` against a source lookup.
+
+    Tries full name, then "first last"; a surname-only fallback is used ONLY
+    when that surname is unambiguous. Returns (None, "none") otherwise.
+    """
+    n = _norm_name(name)
+    toks = n.split()
+    for v in _name_variants(name):
+        e = lookup.get(v)
+        if e is not None:
+            return e, ("full" if v == n else "first+last")
+    if toks:
+        e = lookup.get(f"__last__{toks[-1]}")
+        if e is not None and not e.get("_ambiguous"):
+            return e, "lastname"
+    return None, "none"
+
+
 def _get(url: str, retries: int = 3, **kwargs) -> dict | list:
     for attempt in range(retries):
         try:
@@ -197,23 +267,17 @@ def load_pl_stats(path: str = "data/pl_stats_2025.json") -> list[dict]:
 
 
 def build_apif_lookup(pl_stats: list[dict]) -> dict[str, dict]:
-    """Index API-Football season records by norm name (+ ``__last__`` fallback)
-    for ``starter_rate`` and detail-stat fallback. Highest-minutes entry wins.
+    """Index API-Football season records for ``starter_rate`` and detail-stat
+    fallback. API-Football abbreviates first names, so matches are usually
+    surname-based (ambiguous surnames are refused by ``match_entry``).
     """
     lookup: dict[str, dict] = {}
-
-    def _put(key: str, rec: dict) -> None:
-        prev = lookup.get(key)
-        if prev is None or _num(rec.get("minutes")) >= _num(prev.get("minutes")):
-            lookup[key] = rec
-
+    last_seen: dict[str, set] = {}
     for rec in pl_stats:
-        name = rec.get("norm_name") or _norm_name(rec.get("name") or "")
+        name = rec.get("name") or rec.get("norm_name") or rec.get("lastname") or ""
         if name:
-            _put(_norm_name(name), rec)
-        last = _norm_name(rec.get("lastname") or "")
-        if last:
-            _put(f"__last__{last}", rec)
+            _index_entry(lookup, last_seen, name, rec)
+    _flag_ambiguous(lookup, last_seen)
     return lookup
 
 
@@ -277,9 +341,7 @@ def validate_scoring(fantrax_players: list[dict], stat_lookup: dict,
     for fx in fantrax_players:
         if fx["total_pts"] <= 0:
             continue
-        nkey = _norm_name(fx["name"])
-        last = nkey.split()[-1] if nkey else ""
-        sl = stat_lookup.get(nkey) or (stat_lookup.get(f"__last__{last}") if last else None)
+        sl, _ = match_entry(fx["name"], stat_lookup)
         if not sl:
             continue
         calc = score_from_stats(sl, fx["position"])
@@ -365,12 +427,7 @@ def build_fpl_lookup(bootstrap: dict) -> dict[str, dict]:
     """
     team_map = {t["id"]: t["name"] for t in bootstrap.get("teams", [])}
     lookup: dict[str, dict] = {}
-
-    def _put(key: str, entry: dict) -> None:
-        prev = lookup.get(key)
-        if prev is None or entry["minutes"] >= prev["minutes"]:
-            lookup[key] = entry
-
+    last_seen: dict[str, set] = {}
     for p in bootstrap.get("elements", []):
         full = f"{p.get('first_name','')} {p.get('second_name','')}".strip()
         entry = {
@@ -380,16 +437,8 @@ def build_fpl_lookup(bootstrap: dict) -> dict[str, dict]:
             "team_name":     team_map.get(p.get("team"), ""),
             "minutes":       _num(p.get("minutes")),
         }
-        nkey = _norm_name(full)
-        if nkey:
-            _put(nkey, entry)
-        # Also index by the FPL web_name (often the common short name) and lastname.
-        web = _norm_name(p.get("web_name") or "")
-        if web and web != nkey:
-            _put(web, entry)
-        last = _norm_name(p.get("second_name") or p.get("web_name") or "")
-        if last:
-            _put(f"__last__{last}", entry)
+        _index_entry(lookup, last_seen, full, entry)
+    _flag_ambiguous(lookup, last_seen)
     return lookup
 
 
@@ -422,7 +471,7 @@ def build_sleeper_lookup(players: dict, season_stats: dict) -> dict[str, dict]:
     a last-name-only join to it is flagged as higher risk in the debug view.
     """
     lookup: dict[str, dict] = {}
-    last_players: dict[str, set] = {}  # lastname → distinct full-name norms
+    last_seen: dict[str, set] = {}
     for pid, raw in season_stats.items():
         info = players.get(pid) or {}
         full_name = (
@@ -442,21 +491,8 @@ def build_sleeper_lookup(players: dict, season_stats: dict) -> dict[str, dict]:
         if "second_yellow" in vals:
             vals["red_card"] = vals.get("red_card", 0.0) + vals.pop("second_yellow")
         vals.setdefault("minutes", 0.0)
-        key = _norm_name(full_name)
-        prev = lookup.get(key)
-        if prev is None or vals["minutes"] >= prev.get("minutes", 0):
-            lookup[key] = vals
-        last = _norm_name(info.get("last_name") or "")
-        if last:
-            last_players.setdefault(last, set()).add(key)
-            lk = f"__last__{last}"
-            prevl = lookup.get(lk)
-            if prevl is None or vals["minutes"] >= prevl.get("minutes", 0):
-                lookup[lk] = vals
-    # Flag surnames shared by more than one player.
-    for last, names in last_players.items():
-        if len(names) > 1:
-            lookup[f"__last__{last}"]["_ambiguous"] = True
+        _index_entry(lookup, last_seen, full_name, vals)
+    _flag_ambiguous(lookup, last_seen)
     return lookup
 
 
@@ -504,35 +540,22 @@ def build_player_stats(
     sleeper_lookup = sleeper_lookup or {}
     apif_lookup    = apif_lookup or {}
 
-    def _match(nkey: str, last: str, table: dict):
-        """(entry, match_type, ambiguous) — full-name key then lastname fallback."""
-        e = table.get(nkey)
-        if e is not None:
-            return e, "full", False
-        if last:
-            e = table.get(f"__last__{last}")
-            if e is not None:
-                return e, "lastname", bool(e.get("_ambiguous"))
-        return None, "none", False
-
     # ------------------------------------------------------------------
     # Pass 1 — join enrichment, carry real Fantrax points/PPG/games/position.
     # ------------------------------------------------------------------
     interim: list[dict] = []
     for fx in fantrax_players:
-        nkey = _norm_name(fx["name"])
-        last = nkey.split()[-1] if nkey else ""
-
-        sl, s_match, s_amb = _match(nkey, last, sleeper_lookup)
-        ap, _, _           = _match(nkey, last, apif_lookup)
-        fpl                = fpl_lookup.get(nkey) or (fpl_lookup.get(f"__last__{last}") if last else None)
+        sl, s_match = match_entry(fx["name"], sleeper_lookup)
+        ap, _       = match_entry(fx["name"], apif_lookup)
+        fpl, _      = match_entry(fx["name"], fpl_lookup)
 
         values, source = _detail_source(sl, ap)
-        starter_rate = _num(ap.get("starter_rate")) if ap else 1.0
-        starter_rate = starter_rate or 1.0
+        starter_rate = (_num(ap.get("starter_rate")) if ap else 1.0) or 1.0
 
         interim.append({"fx": fx, "sl": sl, "ap": ap, "fpl": fpl,
-                        "match_type": s_match, "ambiguous_last": s_amb,
+                        "match_type": s_match,
+                        # ambiguous surnames are now refused, so no risky joins remain
+                        "ambiguous_last": False,
                         "values": values, "source": source,
                         "starter_rate": starter_rate})
 

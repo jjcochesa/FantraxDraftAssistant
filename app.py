@@ -311,8 +311,9 @@ def _render_data_source_debug(ds: DraftState) -> None:
                             sorted(p["name"] for p in players), key="_dbg_player")
         p = next((x for x in players if x["name"] == pick), None)
         if p:
-            badge = {"full": "✅ full-name", "lastname": "⚠️ last-name only",
-                     "none": "❌ no Sleeper match"}.get(p.get("match_type"), "—")
+            badge = {"full": "✅ full-name", "first+last": "✅ first+last",
+                     "lastname": "⚠️ surname only", "none": "❌ no Sleeper match"
+                     }.get(p.get("match_type"), "—")
             if p.get("ambiguous_last"):
                 badge += "  ·  ⚠️ shared surname"
             st.markdown(
