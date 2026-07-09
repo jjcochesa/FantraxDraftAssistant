@@ -69,57 +69,100 @@ def diagnose_bias(fx: list, players: dict, season: dict) -> None:
         de._index_entry(raw_lookup, seen, name, entry)
     de._flag_ambiguous(raw_lookup, seen)
 
-    scored = set(de._SLEEPER_FIELD.values())  # Sleeper codes we already score
-    resid, raws = [], []
+    for pos in ("F", "M"):
+        _fit_position(fx, raw_lookup, pos)
+
+
+# Sleeper raw code → our assumed Fantrax point value (outfield). `cs` differs by
+# position; `gp/gs/sat` are candidates we do NOT currently score (assumed 0).
+_ASSUMED = {
+    "g": 9, "at": 6, "sot": 2, "kp": 2, "cos": 1, "acnc": 1, "tkw": 2,
+    "int": 1.5, "bs": 1.5, "aer": 0.5, "clr": 0.0, "dis": -0.5, "pkd": 2,
+    "pkm": -4, "og": -5, "yc": -2, "rc": -7,
+    "gp": 0.0, "gs": 0.0, "sat": 0.0,
+}
+
+
+def _fit_position(fx: list, raw_lookup: dict, pos: str) -> None:
+    """Multivariate least-squares: recover each stat's true Fantrax point value
+    for one position, controlling for the others. A recovered value far from our
+    assumption (or a big intercept / candidate coefficient) is the bias source."""
+    assumed = dict(_ASSUMED)
+    assumed["cs"] = 1.0 if pos == "M" else 0.0
+    feats = list(assumed)
+
+    X, y = [], []
     for p in fx:
-        if p["position"] not in ("M", "F") or p["total_pts"] <= 0:
+        if p["position"] != pos or p["total_pts"] <= 0:
             continue
-        rawrow, _ = de.match_entry(p["name"], raw_lookup)
-        if not rawrow:
+        r, _ = de.match_entry(p["name"], raw_lookup)
+        if not r:
             continue
-        calc = de.score_from_stats(
-            {ft: de._num(rawrow.get(code)) for ft, code in de._SLEEPER_FIELD.items()},
-            p["position"])
-        resid.append(p["total_pts"] - calc)
-        raws.append(rawrow)
+        row = [1.0]  # intercept
+        for f in feats:
+            if f == "rc":
+                row.append(de._num(r.get("rc")) + de._num(r.get("yc2")))
+            else:
+                row.append(de._num(r.get(f)))
+        X.append(row)
+        y.append(p["total_pts"])
 
-    n = len(resid)
-    if n < 20:
-        print("\n(Not enough MID/FWD matches to diagnose the bias.)")
+    if len(X) < 40:
+        print(f"\n({pos}: only {len(X)} matches — too few to fit.)")
         return
-    mr = sum(resid) / n
 
-    # candidate fields: any numeric field present on many players
-    fields = {}
-    for row in raws:
-        for k, v in row.items():
-            if k.startswith("pos_") or k.endswith("90") or k == "minutes":
-                continue
-            if isinstance(v, (int, float)):
-                fields.setdefault(k, 0)
-                fields[k] += 1
-    results = []
-    for k in fields:
-        xs = [de._num(r.get(k)) for r in raws]
-        mx = sum(xs) / n
-        sxx = sum((x - mx) ** 2 for x in xs)
-        if sxx <= 0:
+    coef = _solve_ols(X, y)
+    yh = [sum(c * xi for c, xi in zip(coef, row)) for row in X]
+    my = sum(y) / len(y)
+    ss_res = sum((a - b) ** 2 for a, b in zip(y, yh))
+    ss_tot = sum((a - my) ** 2 for a in y)
+    r2 = 1 - ss_res / ss_tot if ss_tot else 0
+
+    label = {"F": "FORWARDS", "M": "MIDFIELDERS"}[pos]
+    print(f"\n=== Recovered scoring — {label} (n={len(X)}, R²={r2:.3f}) ===")
+    print(f"  intercept (per-season constant): {coef[0]:+.1f}")
+    print(f"  {'stat':6} {'recovered':>10} {'assumed':>8} {'Δ':>7}")
+    for i, f in enumerate(feats, start=1):
+        rec, asm = coef[i], assumed[f]
+        flag = "  <-- off" if abs(rec - asm) >= 0.75 and abs(rec) >= 0.4 else ""
+        print(f"  {f:6} {rec:10.2f} {asm:8.1f} {rec - asm:+7.2f}{flag}")
+
+
+def _solve_ols(X: list, y: list, ridge: float = 1.0) -> list:
+    """Ordinary least squares via ridge-stabilised normal equations (numpy if
+    available, else pure-Python Gaussian elimination)."""
+    k = len(X[0])
+    try:
+        import numpy as np
+        A = np.array(X, float)
+        b = np.array(y, float)
+        AtA = A.T @ A + ridge * np.eye(k)
+        AtA[0, 0] -= ridge  # don't penalise the intercept
+        return list(np.linalg.solve(AtA, A.T @ b))
+    except Exception:
+        pass
+    AtA = [[0.0] * k for _ in range(k)]
+    Atb = [0.0] * k
+    for row, yi in zip(X, y):
+        for a in range(k):
+            Atb[a] += row[a] * yi
+            for c in range(k):
+                AtA[a][c] += row[a] * row[c]
+    for a in range(1, k):
+        AtA[a][a] += ridge
+    # Gaussian elimination with partial pivoting
+    M = [AtA[i] + [Atb[i]] for i in range(k)]
+    for col in range(k):
+        piv = max(range(col, k), key=lambda r: abs(M[r][col]))
+        M[col], M[piv] = M[piv], M[col]
+        if abs(M[col][col]) < 1e-9:
             continue
-        sxr = sum((x - mx) * (rr - mr) for x, rr in zip(xs, resid))
-        srr = sum((rr - mr) ** 2 for rr in resid)
-        slope = sxr / sxx
-        corr = sxr / (sxx ** 0.5 * srr ** 0.5) if srr > 0 else 0
-        results.append((abs(corr), corr, slope, mx, k))
-    results.sort(reverse=True)
-
-    print("\n=== Bias diagnosis (MID+FWD residual = Fantrax − calc, mean "
-          f"{mr:+.1f}) ===")
-    print("Raw field vs residual — a high-|corr| field we DON'T already score is")
-    print("the culprit; 'slope' ≈ its Fantrax points-per-unit.\n")
-    print(f"  {'field':10} {'corr':>6} {'slope':>7} {'avg':>7}  scored?")
-    for _, corr, slope, mx, k in results[:15]:
-        print(f"  {k:10} {corr:6.2f} {slope:7.2f} {mx:7.1f}  "
-              f"{'yes' if k in scored else 'NO  <-- candidate'}")
+        for r in range(k):
+            if r != col:
+                f = M[r][col] / M[col][col]
+                for cc in range(col, k + 1):
+                    M[r][cc] -= f * M[col][cc]
+    return [M[i][k] / M[i][i] if abs(M[i][i]) > 1e-9 else 0.0 for i in range(k)]
 
 
 if __name__ == "__main__":
