@@ -104,7 +104,7 @@ _EPL_TEAM: dict[str, str] = {
 # Fantrax scoring rules — REFERENCE ONLY.
 #
 # Points are taken directly from the Fantrax export now; this table documents
-# the league's scoring (GK vs D/M/F groups; clean sheets GK 8 / D 6 / M 1 / F 0)
+# the league's scoring (GK vs D/M/F groups; clean sheets GK 8, all outfield +6)
 # and is no longer used to compute points.
 # ---------------------------------------------------------------------------
 FANTRAX_SCORING: dict[str, dict | float] = {
@@ -116,8 +116,10 @@ FANTRAX_SCORING: dict[str, dict | float] = {
     "successful_dribbles":  1.0,   # CoS — Contests Succeeded
     "accurate_crosses":     1.0,   # ACNC
     "penalty_drawn":        {"G": 0,   "D": 2,   "M": 2,   "F": 2},   # PKD
-    # Defensive
-    "clean_sheets":        {"G": 8,   "D": 6,   "M": 1,   "F": 0},
+    # Defensive. Clean sheets are +6 to EVERY outfielder (D/M/F) — verified by
+    # recovering the coefficient from Sleeper stats vs Fantrax FPts (~6 for both
+    # mids and forwards). GK is +8.
+    "clean_sheets":        {"G": 8,   "D": 6,   "M": 6,   "F": 6},
     "tackles_won":         {"G": 1,   "D": 2,   "M": 2,   "F": 2},    # TKW
     "interceptions":       {"G": 1,   "D": 1.5, "M": 1.5, "F": 1.5},
     "blocked_shots":       {"G": 0,   "D": 1.5, "M": 1.5, "F": 1.5},  # BS
