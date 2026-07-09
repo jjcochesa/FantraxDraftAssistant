@@ -5,12 +5,13 @@ Live Online Standard Snake draft helper for the Wiregrass Futbol Association
 (Fantrax league wxgdnh5dmrbb90nb): 16 rounds, roster of 16 (11 active + 5
 reserve + 1 IR), positions G/D/M/F.
 
-Points use Fantrax scoring only (see draft_engine.FANTRAX_SCORING). Season stats
-come from the bundled API-Football 2025/26 file; FPL supplies cost / ownership
-(an ADP proxy until Fantrax community drafts start) and clean-sheet gap-fill.
+Points, PPG and positions come straight from the bundled Fantrax export
+(data/fantrax_players_2025.csv) — ground truth. Sleeper / API-Football supply
+the stat-detail columns and starter rate; FPL supplies cost / ownership (an ADP
+proxy until Fantrax community drafts start).
 
 Caching:
-  @st.cache_data(ttl=3600)  — heavy player DB (bundled stats + FPL)
+  @st.cache_data(ttl=3600)  — player DB (bundled Fantrax pool + enrichment)
   @st.cache_resource        — DraftState (holds live/manual picks)
 """
 
@@ -18,13 +19,12 @@ import pandas as pd
 import streamlit as st
 
 from draft_engine import (
+    DETAIL_STATS,
     DraftState,
-    FANTRAX_SCORING,
     FantraxAPI,
     POSITION_ORDER,
     _norm_name,
-    build_from_sources,
-    fetch_sources,
+    fetch_player_db,
 )
 
 # ---------------------------------------------------------------------------
@@ -48,15 +48,9 @@ POS_LABELS = {"G": "GK", "D": "DEF", "M": "MID", "F": "FWD"}
 # ---------------------------------------------------------------------------
 
 @st.cache_data(ttl=3600, show_spinner="Loading player database…")
-def _load_sources() -> dict:
-    """Slow network fetch (bundled stats + FPL) — cached for an hour."""
-    return fetch_sources()
-
-
-@st.cache_data(ttl=3600, show_spinner=False)
-def _build_db(tackle_win_rate: float) -> dict:
-    """Cheap re-score keyed on the tackle-win rate (sources are cached)."""
-    return build_from_sources(_load_sources(), tackle_win_rate)
+def _load_player_db() -> dict:
+    """Load the Fantrax pool + enrichment (FPL/Sleeper). Cached for an hour."""
+    return fetch_player_db()
 
 
 @st.cache_resource(show_spinner="Preparing draft…")
@@ -65,12 +59,27 @@ def _get_draft_state(league_id: str, num_teams: int, num_rounds: int) -> DraftSt
 
 
 def _auto_dp_score(p: dict) -> float:
-    """Primary signal is projected_pts (already full Fantrax scoring). Players
-    with no projection fall to the bottom, ordered by FPL ownership proxy."""
+    """Primary signal is projected_pts. Players with no projection fall to the
+    bottom, ordered by Fantrax rank (last season) then ownership."""
     proj = p.get("projected_pts") or 0.0
     if proj > 0:
         return proj
-    return (p.get("ownership_pct") or 0.0) - 1000.0
+    rk = p.get("rank_ov")
+    return -(rk if rk else 9999) - 1000.0
+
+
+# Build the DB up front so DP-text mutations happen BEFORE the text_area widget
+# (Streamlit forbids writing a widget-backed session_state key after its widget
+# exists).
+player_db = _load_player_db()
+
+if st.session_state.pop("_trigger_auto_dp", False):
+    ranked = sorted(player_db["player_data"].values(), key=_auto_dp_score, reverse=True)
+    st.session_state["dp_rankings_text"] = "\n".join(
+        p["name"] for p in ranked[:150] if p.get("name")
+    )
+if st.session_state.pop("_trigger_clear_dp", False):
+    st.session_state["dp_rankings_text"] = ""
 
 
 # ---------------------------------------------------------------------------
@@ -89,27 +98,6 @@ with st.sidebar:
                                  value=16, step=1)
     my_slot = st.number_input("My draft slot", min_value=1, max_value=int(num_teams),
                               value=1, step=1)
-
-    tackle_win_rate = st.slider(
-        "Tackle-won rate (fallback)", min_value=0.50, max_value=1.00, value=0.65,
-        step=0.05,
-        help="Players matched in Sleeper use real tackles-WON directly. This only "
-             "affects players NOT found in Sleeper, discounting API-Football's "
-             "total tackles (≈0.65 league average). Set to 1.00 to use totals.",
-    )
-
-    # Build the DB now (cheap; sources are cached) so DP-text mutations can run
-    # BEFORE the text_area widget — Streamlit forbids writing a widget-backed
-    # session_state key after its widget exists.
-    player_db = _build_db(tackle_win_rate)
-
-    if st.session_state.pop("_trigger_auto_dp", False):
-        ranked = sorted(player_db["player_data"].values(), key=_auto_dp_score, reverse=True)
-        st.session_state["dp_rankings_text"] = "\n".join(
-            p["name"] for p in ranked[:150] if p.get("name")
-        )
-    if st.session_state.pop("_trigger_clear_dp", False):
-        st.session_state["dp_rankings_text"] = ""
 
     st.divider()
 
@@ -166,18 +154,21 @@ if dp_text.strip():
 # ---------------------------------------------------------------------------
 
 with status_slot.container():
-    stats_icon = "✅" if ds.stats_loaded else "⚠️"
+    fx_icon  = "✅" if ds.fantrax_loaded else "❌"
     fpl_icon = "✅" if ds.fpl_loaded else "⚠️"
     slp_icon = f"✅ {ds.sleeper_matched}" if ds.sleeper_loaded else "⚠️"
-    dp_icon = f"✅ {len(dp_lookup)}" if dp_lookup else "—"
+    dp_icon  = f"✅ {len(dp_lookup)}" if dp_lookup else "—"
     st.caption(
-        f"Stats {stats_icon} {player_db.get('num_players', 0)}  ·  "
+        f"Fantrax {fx_icon} {player_db.get('num_players', 0)}  ·  "
         f"Sleeper {slp_icon}  ·  FPL {fpl_icon}  ·  DP {dp_icon}"
     )
+    if not ds.fantrax_loaded:
+        st.error("Fantrax pool (data/fantrax_players_2025.csv) not found — "
+                 "the app has no player data. Re-export from Fantrax into data/.")
     if not ds.sleeper_loaded:
         st.caption(
-            "⚠️ Sleeper not reachable — falling back to the API-Football tackle "
-            "proxy (tune with the tackle-won rate) and FPL clean-sheet gap-fill."
+            "⚠️ Sleeper not reachable — stat-detail columns fall back to "
+            "API-Football (points/PPG/positions are unaffected: they come from Fantrax)."
         )
         if ds.sleeper_error:
             with st.expander("Sleeper error"):
@@ -210,8 +201,9 @@ st.divider()
 
 DETAIL_FIELDS = [
     ("G",   "goals"),   ("A",   "assists"), ("SoT", "shots_on_target"),
-    ("KP",  "key_passes"), ("Drb", "successful_dribbles"),
+    ("KP",  "key_passes"), ("Drb", "successful_dribbles"), ("AcX", "accurate_crosses"),
     ("Tkl", "tackles_won"), ("Int", "interceptions"), ("Blk", "blocked_shots"),
+    ("Aer", "aerials_won"), ("Clr", "clearances"),
     ("CS",  "clean_sheets"), ("Sv", "saves"),
     ("YC",  "yellow_cards"), ("RC", "red_cards"),
 ]
@@ -256,23 +248,24 @@ def _rankings_column_config(detail: bool) -> dict:
     return cfg
 
 
-# Readable labels for the raw Fantrax scoring stats (debug view).
+# Readable labels for the detail stats (debug view).
 STAT_LABELS = {
     "goals": "Goals", "assists": "Assists", "shots_on_target": "SoT",
     "key_passes": "Key passes", "successful_dribbles": "Dribbles (CoS)",
-    "accurate_crosses": "Acc. crosses (ACNC)", "penalty_drawn": "Pens drawn",
-    "clean_sheets": "Clean sheets", "tackles_won": "Tackles won",
+    "accurate_crosses": "Acc. crosses (ACNC)", "tackles_won": "Tackles won",
     "interceptions": "Interceptions", "blocked_shots": "Blocked shots",
-    "aerials_won": "Aerials won", "clearances": "Clearances", "saves": "Saves",
-    "penalties_saved": "Pens saved", "high_claims": "High claims",
-    "smothers": "Smothers", "goals_against": "Goals against",
-    "yellow_card": "Yellow", "red_card": "Red", "own_goals": "Own goals",
-    "penalties_missed": "Pens missed", "dispossessed": "Dispossessed",
+    "aerials_won": "Aerials won", "clearances": "Clearances",
+    "clean_sheets": "Clean sheets", "saves": "Saves",
+    "yellow_card": "Yellow", "red_card": "Red",
 }
+# DETAIL_STATS key → record field name (a couple pluralise).
+_STAT_FIELD = {"yellow_card": "yellow_cards", "red_card": "red_cards"}
 
 
 def _render_data_source_debug(ds: DraftState) -> None:
-    """Per-player stat provenance, risky name matches, and top unmatched starters."""
+    """Per-player detail-stat source, risky name matches, and top players missing
+    a Sleeper join. Points/PPG/positions always come from Fantrax; this only
+    audits the enrichment join used for the stat-detail columns."""
     with st.expander("🔎 Data sources & match quality (debug)", expanded=False):
         players = list(ds.player_data.values())
         if not players:
@@ -284,17 +277,19 @@ def _render_data_source_debug(ds: DraftState) -> None:
         amb   = sum(1 for p in players if p.get("ambiguous_last"))
         unm   = [p for p in players if not p.get("has_sleeper")]
         st.caption(
-            f"Sleeper matches **{len(players) - len(unm)} / {len(players)}**  ·  "
-            f"full-name {full}  ·  last-name {lastn} ({amb} on a shared surname)  ·  "
-            f"unmatched {len(unm)}"
+            f"Points/PPG/position come from the **Fantrax export** for all "
+            f"{len(players)} players. Detail-stat join → Sleeper "
+            f"**{len(players) - len(unm)} / {len(players)}** "
+            f"(full-name {full} · last-name {lastn}, {amb} shared-surname)  ·  "
+            f"API-Football matched {ds.apif_matched}."
         )
         if not ds.sleeper_loaded:
             st.warning(
-                "Sleeper wasn't loaded this session — provenance below reflects the "
-                "API-Football / FPL fallback, not a live Sleeper join."
+                "Sleeper wasn't loaded this session — detail columns fall back to "
+                "API-Football. Points, PPG and positions are unaffected (Fantrax)."
             )
 
-        # 1) Per-player stat provenance
+        # 1) Per-player detail-stat source
         pick = st.selectbox("Inspect a player's stat sources",
                             sorted(p["name"] for p in players), key="_dbg_player")
         p = next((x for x in players if x["name"] == pick), None)
@@ -304,38 +299,42 @@ def _render_data_source_debug(ds: DraftState) -> None:
             if p.get("ambiguous_last"):
                 badge += "  ·  ⚠️ shared surname"
             st.markdown(
-                f"**{p['name']}** — {POS_LABELS.get(p['position'])} · {p['team']}  |  "
-                f"Sleeper: {badge}  ·  FPL: {'✅' if p.get('has_fpl') else '—'}"
+                f"**{p['name']}** — {POS_LABELS.get(p['position'])} · {p['team']} · "
+                f"{p['total_pts']} pts (Fantrax)  |  Sleeper: {badge}  ·  "
+                f"API-Football: {'✅' if p.get('has_apif') else '—'}  ·  "
+                f"FPL: {'✅' if p.get('has_fpl') else '—'}"
             )
-            prov, vals = p.get("_provenance", {}), p.get("_stats", {})
-            rows = [{"Stat": STAT_LABELS.get(s, s), "Value": vals.get(s, 0),
-                     "Source": prov.get(s, "—")} for s in FANTRAX_SCORING]
+            src = p.get("_detail_source", {})
+            rows = [{"Stat": STAT_LABELS.get(s, s),
+                     "Value": p.get(_STAT_FIELD.get(s, s)),
+                     "Source": src.get(s, "—")} for s in DETAIL_STATS]
             st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch",
                          height=min(36 * len(rows) + 40, 620))
 
-        # 2) Last-name-only matches (highest risk first: shared surname, then minutes)
+        # 2) Last-name-only matches (highest risk first: shared surname, then games)
         risky = sorted((p for p in players if p.get("match_type") == "lastname"),
-                       key=lambda x: (not x.get("ambiguous_last"), -x.get("minutes", 0)))
+                       key=lambda x: (not x.get("ambiguous_last"), -x.get("games", 0)))
         if risky:
-            st.markdown("**Last-name-only matches** — verify these (shared-surname first)")
+            st.markdown("**Last-name-only Sleeper matches** — verify these (shared-surname first)")
             st.dataframe(pd.DataFrame([
                 {"Name": p["name"], "Pos": POS_LABELS.get(p["position"]),
-                 "Club": p["team"], "Min": p["minutes"],
+                 "Club": p["team"], "GW": p["games"],
                  "Shared surname": "⚠️" if p.get("ambiguous_last") else ""}
                 for p in risky[:25]
             ]), hide_index=True, width="stretch")
 
-        # 3) Top unmatched by minutes — a high-minutes miss is a join bug to chase
-        st.markdown("**Top unmatched starters by minutes** (a high-minutes miss = a join bug)")
-        top_unm = sorted(unm, key=lambda x: x.get("minutes", 0), reverse=True)[:10]
+        # 3) Top players missing a Sleeper join, by games — biggest missing detail
+        st.markdown("**Top players with no Sleeper detail-stats, by GW played**")
+        top_unm = sorted(unm, key=lambda x: x.get("games", 0), reverse=True)[:10]
         if top_unm:
             st.dataframe(pd.DataFrame([
                 {"Name": p["name"], "Pos": POS_LABELS.get(p["position"]),
-                 "Club": p["team"], "Min": p["minutes"]}
+                 "Club": p["team"], "GW": p["games"],
+                 "API-Football": "✅" if p.get("has_apif") else "—"}
                 for p in top_unm
             ]), hide_index=True, width="stretch")
         else:
-            st.caption("No unmatched players — every player joined to Sleeper.")
+            st.caption("Every player joined to Sleeper.")
 
 
 # ---------------------------------------------------------------------------
@@ -389,13 +388,11 @@ with tab_ranks:
                      height=min(36 * len(df) + 40, 720))
 
     st.caption(
-        f"**26/27 Proj** = Bayesian-blended PPG (player + position prior) × 34 GWs "
-        f"× participation rate · min 15 GWs required. Tackles won, interceptions, "
-        f"blocks, crosses, clean sheets, aerials & dispossessed come from Sleeper "
-        f"(same Opta feed as Fantrax); unmatched players fall back to the "
-        f"API-Football tackle proxy at ~{tackle_win_rate:.0%}. **ADP / Own%** = "
-        f"FPL 25/26 ownership proxy (community consensus) until Fantrax community "
-        f"drafts open in August."
+        "**25/26 Pts / PPG / Pos** are Fantrax's own final totals (from the league "
+        "export). **26/27 Proj** = Bayesian-blended PPG (player + position prior) × "
+        "34 GWs × availability rate · min 15 GWs required. Detail stats come from "
+        "Sleeper (Opta), API-Football fallback. **ADP / Own%** = FPL 25/26 ownership "
+        "proxy (community consensus) until Fantrax community drafts open in August."
     )
 
     _render_data_source_debug(ds)

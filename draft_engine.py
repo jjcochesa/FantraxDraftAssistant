@@ -3,20 +3,29 @@ Draft engine for the Fantrax EPL Draft Assistant.
 
 Data flow
 ---------
-Points are computed with **Fantrax** scoring rules only. The canonical player
-pool and per-player stats come from the harvested API-Football 2025/26 PL
-season file (``data/pl_stats_2025.json``). FPL is used **only** to fill stat
-gaps that API-Football's season aggregate does not expose (clean sheets, own
-goals) and to supply cost / ownership% (an ADP proxy until Fantrax community
-drafts start in August) and club display names — never FPL points or FPL
-positions.
+The **canonical source is Fantrax's own player export**
+(``data/fantrax_players_2025.csv`` — the league's exported pool): real 25/26
+Fantrax points (``FPts``), points-per-game (``FP/G``), position (G/D/M/F) and
+club. These are ground truth, so the app never reconstructs points from raw
+stats any more.
 
-The Fantrax API (``fantrax.com/fxpa/req``) is wired in as a best-effort,
-optional source for the live player pool and draft board. It requires a logged
--in session cookie, so everything degrades gracefully when it is unavailable
-(pre-draft research mode still works fully offline off the bundled JSON + FPL).
+Enrichment is joined by name onto that pool:
+  • Sleeper ``stats/clubsoccer:epl`` — real Opta per-stat counts (goals,
+    tackles won, clean sheets, …) for the detail columns.
+  • API-Football (bundled JSON) — ``starter_rate`` (starts/appearances) for the
+    projection's availability term, and a detail-stat fallback.
+  • FPL ``bootstrap-static`` — cost and ownership% (an ADP proxy until Fantrax
+    community drafts start). Never FPL points or FPL positions.
+
+The 26/27 projection is a Bayesian blend of each player's real FP/G with a
+position prior, scaled to 34 GWs × an availability rate.
+
+The Fantrax API (``fantrax.com/fxpa/req``) remains a best-effort, optional
+source for the live draft board (needs a session cookie). Everything degrades
+gracefully — the core runs fully offline from the two bundled data files.
 """
 
+import csv
 import json
 import time
 import unicodedata
@@ -71,17 +80,32 @@ _SLEEPER_FIELD: dict[str, str] = {
     "minutes":             "min",
 }
 
+# Detail stats surfaced in the UI (internal key → source key handled per source).
+# Points come from Fantrax directly now; these are for the stat-detail columns.
+DETAIL_STATS = [
+    "goals", "assists", "shots_on_target", "key_passes", "successful_dribbles",
+    "accurate_crosses", "tackles_won", "interceptions", "blocked_shots",
+    "aerials_won", "clearances", "clean_sheets", "saves",
+    "yellow_card", "red_card",
+]
+
+# Fantrax export team code → display name (2026/27 pool, incl. promoted sides).
+_EPL_TEAM: dict[str, str] = {
+    "ARS": "Arsenal",     "AVL": "Aston Villa", "BHA": "Brighton",
+    "BOU": "Bournemouth", "BRF": "Brentford",   "CHE": "Chelsea",
+    "COV": "Coventry",    "CRY": "Crystal Palace", "EVE": "Everton",
+    "FUL": "Fulham",      "HUL": "Hull",        "IPS": "Ipswich",
+    "LEE": "Leeds",       "LIV": "Liverpool",   "MCI": "Man City",
+    "MUN": "Man Utd",     "NEW": "Newcastle",   "NOT": "Nott'm Forest",
+    "SUN": "Sunderland",  "TOT": "Spurs",
+}
+
 # ---------------------------------------------------------------------------
-# Fantrax scoring rules
+# Fantrax scoring rules — REFERENCE ONLY.
 #
-# Two scoring groups: goalkeepers (G) and outfielders (D / M / F share the same
-# rules). Values are points-per-stat. A float applies to every position; a dict
-# gives per-position values (missing position → 0).
-#
-# NOTE on Clean Sheets (CS): the league's Fantrax setup awards clean-sheet
-# points on a positional tier, matching real Fantrax EPL scoring and the
-# reference Sleeper assistant — GK +8, D +6, M +1, F +0 — rather than a flat
-# +6 to every outfielder. Adjust here if your league differs.
+# Points are taken directly from the Fantrax export now; this table documents
+# the league's scoring (GK vs D/M/F groups; clean sheets GK 8 / D 6 / M 1 / F 0)
+# and is no longer used to compute points.
 # ---------------------------------------------------------------------------
 FANTRAX_SCORING: dict[str, dict | float] = {
     # Attacking
@@ -172,68 +196,83 @@ def load_pl_stats(path: str = "data/pl_stats_2025.json") -> list[dict]:
     return json.loads(p.read_text(encoding="utf-8"))
 
 
-def _apif_to_fantrax_stats(rec: dict, tackle_win_rate: float = 0.65) -> dict:
-    """Map an API-Football season record to Fantrax raw-stat inputs.
-
-    Stats API-Football's season aggregate does not expose are omitted (they
-    default to 0 in scoring): clean_sheets, own_goals, accurate_crosses,
-    aerials_won, clearances, high_claims, smothers, dispossessed. Clean sheets
-    and own goals are filled from FPL later; the rest remain 0 until the Fantrax
-    API pool is wired in.
+def build_apif_lookup(pl_stats: list[dict]) -> dict[str, dict]:
+    """Index API-Football season records by norm name (+ ``__last__`` fallback)
+    for ``starter_rate`` and detail-stat fallback. Highest-minutes entry wins.
     """
+    lookup: dict[str, dict] = {}
+
+    def _put(key: str, rec: dict) -> None:
+        prev = lookup.get(key)
+        if prev is None or _num(rec.get("minutes")) >= _num(prev.get("minutes")):
+            lookup[key] = rec
+
+    for rec in pl_stats:
+        name = rec.get("norm_name") or _norm_name(rec.get("name") or "")
+        if name:
+            _put(_norm_name(name), rec)
+        last = _norm_name(rec.get("lastname") or "")
+        if last:
+            _put(f"__last__{last}", rec)
+    return lookup
+
+
+def _apif_detail(rec: dict) -> dict:
+    """Detail-stat counts from an API-Football record (fallback when a player
+    isn't in Sleeper). Missing stats (crosses/aerials/clearances/clean sheets)
+    are simply absent."""
     return {
         "goals":               _num(rec.get("goals")),
         "assists":             _num(rec.get("assists")),
         "shots_on_target":     _num(rec.get("shots_on_target")),
         "key_passes":          _num(rec.get("key_passes")),
         "successful_dribbles": _num(rec.get("dribbles_success")),
-        # API-Football reports TOTAL tackles, but Fantrax scores tackles *won*.
-        # Discount by tackle_win_rate (league-average success ≈ 0.65) so high-
-        # volume tacklers aren't over-credited. Set to 1.0 to use totals as-is.
-        "tackles_won":         _num(rec.get("tackles_total")) * tackle_win_rate,
+        "tackles_won":         _num(rec.get("tackles_total")),
         "interceptions":       _num(rec.get("interceptions")),
         "blocked_shots":       _num(rec.get("tackles_blocks")),
-        "penalty_drawn":       _num(rec.get("penalties_won")),
-        "penalties_missed":    _num(rec.get("penalties_missed")),
-        "penalties_saved":     _num(rec.get("penalties_saved")),
         "saves":               _num(rec.get("saves")),
-        "goals_against":       _num(rec.get("goals_conceded")),
         "yellow_card":         _num(rec.get("yellow_cards")),
-        # A second yellow is a red card in Fantrax terms.
         "red_card":            _num(rec.get("red_cards")) + _num(rec.get("yellowred_cards")),
-        # Not in API-Football's season aggregate — filled from FPL when present.
-        "clean_sheets":        0.0,
-        "own_goals":           0.0,
     }
 
 
-# Fantrax scoring stats that API-Football's season aggregate genuinely provides
-# (clean_sheets/own_goals are placeholders, not real API-Football values). Used
-# for per-stat provenance in the debug view.
-_APIF_PROVIDED = {
-    "goals", "assists", "shots_on_target", "key_passes", "successful_dribbles",
-    "tackles_won", "interceptions", "blocked_shots", "penalty_drawn",
-    "penalties_missed", "penalties_saved", "saves", "goals_against",
-    "yellow_card", "red_card",
-}
+# ---------------------------------------------------------------------------
+# Fantrax export (bundled CSV) — canonical pool: real points, PPG, position
+# ---------------------------------------------------------------------------
 
-
-def _calc_pts(stats: dict, position: str) -> float:
-    """Fantrax fantasy points for a raw-stat dict at a given position."""
-    pos = position.upper()
-    pts = 0.0
-    for stat_name, rule in FANTRAX_SCORING.items():
-        val = _num(stats.get(stat_name))
-        if val == 0:
-            continue
-        mult = rule.get(pos, 0) if isinstance(rule, dict) else float(rule)
-        pts += val * mult
-    return round(pts, 2)
+def load_fantrax_players(path: str = "data/fantrax_players_2025.csv") -> list[dict]:
+    """Load the Fantrax league export. Returns canonical player records with
+    real 25/26 points/PPG/games/position/club. [] if the file is missing."""
+    p = Path(path)
+    if not p.exists():
+        return []
+    out: list[dict] = []
+    with p.open(encoding="utf-8-sig", newline="") as fh:
+        for row in csv.DictReader(fh):
+            name = (row.get("Player") or "").strip()
+            pos  = (row.get("Position") or "").strip().upper()
+            if not name or pos not in POSITION_ORDER:
+                continue
+            fpts = _num(row.get("FPts"))
+            fppg = _num(row.get("FP/G"))
+            games = round(fpts / fppg) if fppg > 0 else 0
+            code = (row.get("Team") or "").strip().upper()
+            out.append({
+                "fantrax_id": (row.get("ID") or "").strip(),
+                "name":       name,
+                "team_code":  code,
+                "team":       _EPL_TEAM.get(code, code or "—"),
+                "position":   pos,
+                "total_pts":  round(fpts, 1),
+                "ppg":        round(fppg, 2),
+                "games":      games,
+                "rank_ov":    int(_num(row.get("RkOv"))) or None,
+            })
+    return out
 
 
 # ---------------------------------------------------------------------------
-# FPL API — cost, ownership (ADP proxy), club, and CS/OG gap-fill ONLY.
-# Never use FPL points or FPL element_type (position).
+# FPL API — cost, ownership (ADP proxy), club. Never FPL points or positions.
 # ---------------------------------------------------------------------------
 
 def get_fpl_bootstrap() -> dict:
@@ -241,33 +280,37 @@ def get_fpl_bootstrap() -> dict:
 
 
 def build_fpl_lookup(bootstrap: dict) -> dict[str, dict]:
-    """Return {norm_lastname: {cost, ownership_pct, team_name, clean_sheets,
-    own_goals, penalties_saved, goals_conceded}} for cross-source matching.
-
-    Keyed by normalised last name (API-Football abbreviates first names, so a
-    full-name join fails — last name is the reliable key). On collision the
-    higher-minutes entry wins so the regular starter is matched, not a reserve.
+    """Return a lookup of {cost, ownership_pct, team_name} keyed by full norm
+    name AND ``__last__<lastname>`` fallback, for joining onto the Fantrax pool
+    (whose names are full). Higher-minutes entry wins on key collision.
     """
     team_map = {t["id"]: t["name"] for t in bootstrap.get("teams", [])}
     lookup: dict[str, dict] = {}
-    for p in bootstrap.get("elements", []):
-        key = _norm_name(p.get("second_name") or p.get("web_name") or "")
-        if not key:
-            continue
-        entry = {
-            "full_name":       f"{p.get('first_name','')} {p.get('second_name','')}".strip(),
-            "cost":            round((p.get("now_cost") or 0) / 10, 1),
-            "ownership_pct":   _num(p.get("selected_by_percent")),
-            "team_name":       team_map.get(p.get("team"), ""),
-            "clean_sheets":    _num(p.get("clean_sheets")),
-            "own_goals":       _num(p.get("own_goals")),
-            "penalties_saved": _num(p.get("penalties_saved")),
-            "goals_conceded":  _num(p.get("goals_conceded")),
-            "minutes":         _num(p.get("minutes")),
-        }
+
+    def _put(key: str, entry: dict) -> None:
         prev = lookup.get(key)
         if prev is None or entry["minutes"] >= prev["minutes"]:
             lookup[key] = entry
+
+    for p in bootstrap.get("elements", []):
+        full = f"{p.get('first_name','')} {p.get('second_name','')}".strip()
+        entry = {
+            "full_name":     full,
+            "cost":          round((p.get("now_cost") or 0) / 10, 1),
+            "ownership_pct": _num(p.get("selected_by_percent")),
+            "team_name":     team_map.get(p.get("team"), ""),
+            "minutes":       _num(p.get("minutes")),
+        }
+        nkey = _norm_name(full)
+        if nkey:
+            _put(nkey, entry)
+        # Also index by the FPL web_name (often the common short name) and lastname.
+        web = _norm_name(p.get("web_name") or "")
+        if web and web != nkey:
+            _put(web, entry)
+        last = _norm_name(p.get("second_name") or p.get("web_name") or "")
+        if last:
+            _put(f"__last__{last}", entry)
     return lookup
 
 
@@ -339,103 +382,89 @@ def build_sleeper_lookup(players: dict, season_stats: dict) -> dict[str, dict]:
 
 
 # ---------------------------------------------------------------------------
-# Player database builder
+# Player database builder — Fantrax pool is canonical; the rest is enrichment.
 # ---------------------------------------------------------------------------
 
 MIN_GW = 15  # below this, projected_pts = 0 (insufficient sample)
 
 
+def _detail_source(sl: Optional[dict], apif_rec: Optional[dict]) -> tuple[dict, dict]:
+    """Return (values, source) dicts over DETAIL_STATS, preferring Sleeper's real
+    Opta counts, falling back to API-Football, else marking the stat missing."""
+    apif = _apif_detail(apif_rec) if apif_rec else {}
+    values, source = {}, {}
+    for stat in DETAIL_STATS:
+        if sl and stat in sl:
+            values[stat] = round(_num(sl[stat]))
+            source[stat] = "Sleeper"
+        elif stat in apif:
+            values[stat] = round(_num(apif[stat]))
+            source[stat] = "API-Football"
+        else:
+            values[stat] = None
+            source[stat] = "missing"
+    return values, source
+
+
 def build_player_stats(
-    pl_stats:        list[dict],
+    fantrax_players: list[dict],
     fpl_lookup:      Optional[dict] = None,
-    tackle_win_rate: float = 0.65,
     sleeper_lookup:  Optional[dict] = None,
+    apif_lookup:     Optional[dict] = None,
 ) -> dict[str, dict]:
-    """Merge API-Football season stats + Sleeper defensive stats + FPL gap-fill
-    into enriched records, compute Fantrax season points and the 26/27 projection.
+    """Build enriched records from the canonical Fantrax pool.
 
-    When a player matches ``sleeper_lookup``, Sleeper's real Opta stats (tackles
-    won, interceptions, blocked shots, accurate crosses, clean sheets, aerials,
-    clearances, dispossessed, own goals) override API-Football's — this is the
-    same feed Fantrax scores on. ``tackle_win_rate`` only affects the API-Football
-    tackle proxy for players NOT found in Sleeper (1.0 = totals unchanged).
+    25/26 points, PPG, games and position come straight from Fantrax. Sleeper /
+    API-Football supply the stat-detail columns and ``starter_rate``; FPL supplies
+    cost and ownership (ADP proxy). The 26/27 projection is a Bayesian blend of
+    the player's real Fantrax PPG with a position prior × 34 GWs × availability.
 
-    Returns {player_key: record}. player_key is norm_name (unique per record).
+    Returns {player_key: record}. player_key is the Fantrax id (or norm name).
     """
     fpl_lookup     = fpl_lookup or {}
     sleeper_lookup = sleeper_lookup or {}
+    apif_lookup    = apif_lookup or {}
+
+    def _match(nkey: str, last: str, table: dict):
+        """(entry, match_type, ambiguous) — full-name key then lastname fallback."""
+        e = table.get(nkey)
+        if e is not None:
+            return e, "full", False
+        if last:
+            e = table.get(f"__last__{last}")
+            if e is not None:
+                return e, "lastname", bool(e.get("_ambiguous"))
+        return None, "none", False
 
     # ------------------------------------------------------------------
-    # Pass 1 — assemble raw records, join Sleeper + FPL, compute season points.
+    # Pass 1 — join enrichment, carry real Fantrax points/PPG/games/position.
     # ------------------------------------------------------------------
     interim: list[dict] = []
-    for rec in pl_stats:
-        pos = _APIF_POS.get((rec.get("position") or "").lower())
-        if pos is None:
-            continue  # skip records with an unrecognised position
+    for fx in fantrax_players:
+        nkey = _norm_name(fx["name"])
+        last = nkey.split()[-1] if nkey else ""
 
-        last = _norm_name(rec.get("lastname") or "")
-        fpl  = fpl_lookup.get(last)
+        sl, s_match, s_amb = _match(nkey, last, sleeper_lookup)
+        ap, _, _           = _match(nkey, last, apif_lookup)
+        fpl                = fpl_lookup.get(nkey) or (fpl_lookup.get(f"__last__{last}") if last else None)
 
-        stats = _apif_to_fantrax_stats(rec, tackle_win_rate)
+        values, source = _detail_source(sl, ap)
+        starter_rate = _num(ap.get("starter_rate")) if ap else 1.0
+        starter_rate = starter_rate or 1.0
 
-        # Sleeper override — real Opta stats (name-matched; the abbreviated
-        # API-Football first name means the lastname key usually does the work).
-        sl = sleeper_lookup.get(_norm_name(rec.get("norm_name") or rec.get("name") or ""))
-        match_type = "full" if sl else "none"
-        ambiguous_last = False
-        if not sl and last:
-            sl = sleeper_lookup.get(f"__last__{last}")
-            if sl:
-                match_type = "lastname"
-                ambiguous_last = bool(sl.get("_ambiguous"))
-        if sl:
-            for stat, v in sl.items():
-                if stat != "minutes" and not stat.startswith("_"):
-                    stats[stat] = v
-
-        # FPL fills only what Sleeper didn't provide (track what it supplied).
-        fpl_filled: set[str] = set()
-        if fpl:
-            if "clean_sheets" not in (sl or {}):
-                stats["clean_sheets"] = fpl["clean_sheets"]; fpl_filled.add("clean_sheets")
-            if "own_goals" not in (sl or {}):
-                stats["own_goals"] = fpl["own_goals"]; fpl_filled.add("own_goals")
-            if not stats["penalties_saved"]:
-                stats["penalties_saved"] = fpl["penalties_saved"]; fpl_filled.add("penalties_saved")
-            if not stats["goals_against"]:
-                stats["goals_against"] = fpl["goals_conceded"]; fpl_filled.add("goals_against")
-
-        # Per-stat provenance for the debug view.
-        provenance: dict[str, str] = {}
-        for stat in FANTRAX_SCORING:
-            if sl and stat in sl:
-                provenance[stat] = "Sleeper"
-            elif stat in fpl_filled:
-                provenance[stat] = "FPL"
-            elif stat in _APIF_PROVIDED:
-                provenance[stat] = "API-Football"
-            else:
-                provenance[stat] = "missing"
-
-        total_pts = _calc_pts(stats, pos)
-        minutes   = int(_num(rec.get("minutes")))
-        games     = min(38, round(minutes / 90)) if minutes > 0 else 0
-        ppg       = round(total_pts / games, 2) if games >= MIN_GW else 0.0
-
-        interim.append({"rec": rec, "pos": pos, "fpl": fpl, "stats": stats,
-                        "has_sleeper": bool(sl), "match_type": match_type,
-                        "ambiguous_last": ambiguous_last, "provenance": provenance,
-                        "total_pts": total_pts, "minutes": minutes,
-                        "games": games, "ppg": ppg})
+        interim.append({"fx": fx, "sl": sl, "ap": ap, "fpl": fpl,
+                        "match_type": s_match, "ambiguous_last": s_amb,
+                        "values": values, "source": source,
+                        "starter_rate": starter_rate})
 
     # ------------------------------------------------------------------
-    # Pass 2 — position-average PPG (qualified players only) as Bayesian prior.
+    # Pass 2 — position-average PPG (qualified players) as the Bayesian prior.
     # ------------------------------------------------------------------
     pos_ppg_acc: dict[str, list[float]] = {p: [] for p in POSITION_ORDER}
     for it in interim:
-        if it["games"] >= MIN_GW and it["ppg"] > 0:
-            pos_ppg_acc[it["pos"]].append(it["ppg"])
+        fx = it["fx"]
+        if fx["games"] >= MIN_GW and fx["ppg"] > 0:
+            pos_ppg_acc[fx["position"]].append(fx["ppg"])
     pos_avg = {
         pos: round(sum(v) / len(v), 3) if v else 8.0
         for pos, v in pos_ppg_acc.items()
@@ -446,12 +475,11 @@ def build_player_stats(
     # ------------------------------------------------------------------
     result: dict[str, dict] = {}
     for it in interim:
-        rec, pos, fpl, stats = it["rec"], it["pos"], it["fpl"], it["stats"]
-        games, ppg = it["games"], it["ppg"]
+        fx, fpl = it["fx"], it["fpl"]
+        pos, games, ppg = fx["position"], fx["games"], fx["ppg"]
+        starter_rate = it["starter_rate"]
 
-        starter_rate = _num(rec.get("starter_rate")) or 1.0
-
-        if games >= MIN_GW:
+        if games >= MIN_GW and ppg > 0:
             prior_ppg = pos_avg.get(pos, 8.0)
             # Adaptive shrinkage: full-season veterans keep ~83% of own PPG;
             # fringe starters shrink harder toward the position prior.
@@ -463,47 +491,44 @@ def build_player_stats(
         else:
             projected_pts = 0.0
 
-        full_name = rec.get("name") or f"{rec.get('firstname','')} {rec.get('lastname','')}".strip()
-        # Prefer FPL's full first name when available (API-Football abbreviates).
-        display_name = (fpl["full_name"] if fpl and fpl.get("full_name") else full_name)
-        key = _norm_name(rec.get("norm_name") or full_name) or full_name
-
+        vals = it["values"]
+        key = fx["fantrax_id"] or _norm_name(fx["name"])
         result[key] = {
-            "name":            display_name,
-            "web_name":        rec.get("lastname") or display_name,
-            "team":            (fpl["team_name"] if fpl and fpl.get("team_name") else rec.get("club", "—")),
+            "name":            fx["name"],
+            "web_name":        fx["name"].split()[-1],
+            "team":            (fpl["team_name"] if fpl and fpl.get("team_name") else fx["team"]),
             "position":        pos,
-            "total_pts":       it["total_pts"],
+            "total_pts":       fx["total_pts"],
             "ppg":             ppg,
             "games":           games,
-            "minutes":         it["minutes"],
+            "rank_ov":         fx["rank_ov"],
             "starter_rate":    round(starter_rate, 3),
             "projected_pts":   projected_pts,
-            "rating":          _num(rec.get("rating")) or None,
-            # Fantrax stat breakdown (season 25/26)
-            "goals":           int(stats["goals"]),
-            "assists":         int(stats["assists"]),
-            "shots_on_target": int(stats["shots_on_target"]),
-            "key_passes":      int(stats["key_passes"]),
-            "successful_dribbles": round(_num(stats["successful_dribbles"])),
-            # Real tackles-won when Sleeper-matched, else API-Football total ×
-            # tackle_win_rate. Round rather than truncate.
-            "tackles_won":     round(_num(stats["tackles_won"])),
-            "interceptions":   round(_num(stats["interceptions"])),
-            "blocked_shots":   round(_num(stats["blocked_shots"])),
-            "clean_sheets":    round(_num(stats["clean_sheets"])),
-            "saves":           int(stats["saves"]),
-            "yellow_cards":    int(stats["yellow_card"]),
-            "red_cards":       int(stats["red_card"]),
+            # Stat-detail columns (Sleeper → API-Football → None)
+            "goals":           vals["goals"],
+            "assists":         vals["assists"],
+            "shots_on_target": vals["shots_on_target"],
+            "key_passes":      vals["key_passes"],
+            "successful_dribbles": vals["successful_dribbles"],
+            "accurate_crosses": vals["accurate_crosses"],
+            "tackles_won":     vals["tackles_won"],
+            "interceptions":   vals["interceptions"],
+            "blocked_shots":   vals["blocked_shots"],
+            "aerials_won":     vals["aerials_won"],
+            "clearances":      vals["clearances"],
+            "clean_sheets":    vals["clean_sheets"],
+            "saves":           vals["saves"],
+            "yellow_cards":    vals["yellow_card"],
+            "red_cards":       vals["red_card"],
             # FPL-sourced (cost + community consensus only)
             "cost":            fpl["cost"]          if fpl else None,
             "ownership_pct":   fpl["ownership_pct"] if fpl else None,
             "has_fpl":         fpl is not None,
-            "has_sleeper":     it["has_sleeper"],
+            "has_sleeper":     it["sl"] is not None,
+            "has_apif":        it["ap"] is not None,
             "match_type":      it["match_type"],
             "ambiguous_last":  it["ambiguous_last"],
-            "_provenance":     it["provenance"],
-            "_stats":          {s: round(_num(stats.get(s, 0)), 2) for s in FANTRAX_SCORING},
+            "_detail_source":  it["source"],
         }
 
     # ADP proxy rank: community consensus via FPL ownership %.
@@ -594,16 +619,18 @@ class FantraxAPI:
 # Heavy loaders for @st.cache_data
 # ---------------------------------------------------------------------------
 
-def fetch_sources(stats_path: str = "data/pl_stats_2025.json",
+def fetch_sources(fantrax_path: str = "data/fantrax_players_2025.csv",
+                  stats_path: str = "data/pl_stats_2025.json",
                   sleeper_year: int = 2025) -> dict:
-    """Fetch the slow inputs only: bundled stats + FPL + Sleeper defensive stats.
+    """Load all inputs: the bundled Fantrax pool (canonical) + bundled
+    API-Football stats, plus live FPL and Sleeper enrichment.
 
-    Kept separate from scoring so the network fetch can be cached once while
-    cheap re-scoring (e.g. changing the tackle-win rate) runs on every rerun.
-    FPL/Sleeper failures degrade gracefully — the app still runs off the bundled
-    stats (with the API-Football tackle proxy) if either is unreachable.
+    Kept separate from record-building so the network fetch caches once. FPL and
+    Sleeper failures degrade gracefully — the core (points, PPG, position,
+    projections) runs entirely off the two bundled files.
     """
-    pl_stats = load_pl_stats(stats_path)
+    fantrax_players = load_fantrax_players(fantrax_path)
+    apif_lookup = build_apif_lookup(load_pl_stats(stats_path))
 
     fpl_lookup: Optional[dict] = None
     fpl_loaded = False
@@ -626,40 +653,43 @@ def fetch_sources(stats_path: str = "data/pl_stats_2025.json",
         sleeper_error = str(exc)
 
     return {
-        "pl_stats":       pl_stats,
-        "fpl_lookup":     fpl_lookup,
-        "sleeper_lookup": sleeper_lookup,
-        "stats_loaded":   bool(pl_stats),
-        "fpl_loaded":     fpl_loaded,
-        "fpl_error":      fpl_error,
-        "sleeper_loaded": sleeper_loaded,
-        "sleeper_error":  sleeper_error,
+        "fantrax_players": fantrax_players,
+        "apif_lookup":     apif_lookup,
+        "fpl_lookup":      fpl_lookup,
+        "sleeper_lookup":  sleeper_lookup,
+        "fantrax_loaded":  bool(fantrax_players),
+        "apif_loaded":     bool(apif_lookup),
+        "fpl_loaded":      fpl_loaded,
+        "fpl_error":       fpl_error,
+        "sleeper_loaded":  sleeper_loaded,
+        "sleeper_error":   sleeper_error,
     }
 
 
-def build_from_sources(sources: dict, tackle_win_rate: float = 0.65) -> dict:
-    """Build the enriched player DB from cached sources (cheap; rate-dependent)."""
+def build_from_sources(sources: dict) -> dict:
+    """Build the enriched player DB from loaded sources."""
     player_data = build_player_stats(
-        sources["pl_stats"], sources.get("fpl_lookup"), tackle_win_rate,
-        sources.get("sleeper_lookup"),
+        sources["fantrax_players"], sources.get("fpl_lookup"),
+        sources.get("sleeper_lookup"), sources.get("apif_lookup"),
     )
-    matched = sum(1 for d in player_data.values() if d.get("has_sleeper"))
     return {
-        "player_data":    player_data,
-        "stats_loaded":   sources["stats_loaded"],
-        "fpl_loaded":     sources["fpl_loaded"],
-        "fpl_error":      sources["fpl_error"],
-        "sleeper_loaded": sources.get("sleeper_loaded", False),
-        "sleeper_error":  sources.get("sleeper_error"),
-        "sleeper_matched": matched,
-        "num_players":    len(player_data),
+        "player_data":     player_data,
+        "fantrax_loaded":  sources["fantrax_loaded"],
+        "apif_loaded":     sources.get("apif_loaded", False),
+        "fpl_loaded":      sources["fpl_loaded"],
+        "fpl_error":       sources["fpl_error"],
+        "sleeper_loaded":  sources.get("sleeper_loaded", False),
+        "sleeper_error":   sources.get("sleeper_error"),
+        "sleeper_matched": sum(1 for d in player_data.values() if d.get("has_sleeper")),
+        "apif_matched":    sum(1 for d in player_data.values() if d.get("has_apif")),
+        "num_players":     len(player_data),
     }
 
 
-def fetch_player_db(stats_path: str = "data/pl_stats_2025.json",
-                    tackle_win_rate: float = 0.65) -> dict:
-    """Convenience: fetch sources + build in one call (used by tests/CLI)."""
-    return build_from_sources(fetch_sources(stats_path), tackle_win_rate)
+def fetch_player_db(fantrax_path: str = "data/fantrax_players_2025.csv",
+                    stats_path: str = "data/pl_stats_2025.json") -> dict:
+    """Convenience: load sources + build in one call (used by tests/CLI)."""
+    return build_from_sources(fetch_sources(fantrax_path, stats_path))
 
 
 # ---------------------------------------------------------------------------
@@ -683,25 +713,29 @@ class DraftState:
         self.my_slot    = my_slot
 
         self.player_data: dict[str, dict] = {}
-        self.stats_loaded  = False
-        self.fpl_loaded    = False
+        self.fantrax_loaded = False
+        self.apif_loaded    = False
+        self.fpl_loaded     = False
         self.fpl_error: Optional[str] = None
         self.sleeper_loaded = False
         self.sleeper_error: Optional[str] = None
         self.sleeper_matched = 0
+        self.apif_matched    = 0
 
         # overall_pick_number → {"key": player_key, "slot": int}
         self.picks: dict[int, dict] = {}
 
     # -- data injection -------------------------------------------------
     def inject_player_db(self, db: dict) -> None:
-        self.player_data    = db.get("player_data", {})
-        self.stats_loaded   = db.get("stats_loaded", False)
-        self.fpl_loaded     = db.get("fpl_loaded", False)
-        self.fpl_error      = db.get("fpl_error")
-        self.sleeper_loaded = db.get("sleeper_loaded", False)
-        self.sleeper_error  = db.get("sleeper_error")
+        self.player_data     = db.get("player_data", {})
+        self.fantrax_loaded  = db.get("fantrax_loaded", False)
+        self.apif_loaded     = db.get("apif_loaded", False)
+        self.fpl_loaded      = db.get("fpl_loaded", False)
+        self.fpl_error       = db.get("fpl_error")
+        self.sleeper_loaded  = db.get("sleeper_loaded", False)
+        self.sleeper_error   = db.get("sleeper_error")
         self.sleeper_matched = db.get("sleeper_matched", 0)
+        self.apif_matched    = db.get("apif_matched", 0)
 
     # -- board geometry -------------------------------------------------
     @property

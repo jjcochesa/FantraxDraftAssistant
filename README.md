@@ -22,21 +22,21 @@ projects 2026/27 fantasy points under Fantrax scoring and helps you draft.
 - **My Team** — drafted squad, positional caps (G3/D8/M8/F6) and best available
   per position.
 - **ADP / Value** — projection rank vs the community ADP proxy.
-- **Data-source debug** (expander under Rankings) — per-player stat provenance
-  (Sleeper / API-Football / FPL / missing), last-name-only matches flagged as
-  higher risk (shared surnames first), and the top unmatched starters by minutes
-  to catch join bugs.
+- **Data-source debug** (expander under Rankings) — per-player detail-stat source
+  (Sleeper / API-Football / missing), last-name-only Sleeper matches flagged as
+  higher risk (shared surnames first), and the top players missing a Sleeper join
+  by GW played, to catch name-join bugs.
 
 ## How projections work
 
-Points use **Fantrax scoring only** (`draft_engine.FANTRAX_SCORING`). Season
-stats come from the bundled API-Football 2025/26 file
-(`data/pl_stats_2025.json`, 537 players). The 26/27 projection is a Bayesian
-blend of each player's own PPG with a position prior, scaled to 34 gameweeks and
-an availability (participation) rate:
+**25/26 points, PPG and positions are Fantrax's own final numbers**, read
+straight from the league export (`data/fantrax_players_2025.csv`) — no
+reconstruction, so the ranking table matches Fantrax exactly. `games` is derived
+as `FPts / FP-G`. The 26/27 projection is a Bayesian blend of each player's real
+Fantrax PPG with a position prior, scaled to 34 gameweeks × an availability rate:
 
 ```
-base PPG          = fantrax_total_pts / games          (require ≥ 15 games)
+base PPG          = Fantrax FP/G          (games = FPts / FP-G, require ≥ 15)
 k                 = max(3.0, 40 / sqrt(games))
 blended PPG       = (games·PPG + k·prior_PPG) / (games + k)
 participation     = min(1, games/34) · min(1, starter_rate)   (floored 0.75 if games ≥ 25)
@@ -47,22 +47,20 @@ projected 26/27   = blended_PPG · 34 · participation
 
 | Source | Used for | Notes |
 | --- | --- | --- |
-| API-Football (bundled JSON) | canonical pool, position, starter rate, attacking stats (goals/assists/SoT/KP) | harvested 2025/26 PL — re-harvest closer to kickoff once transfers settle |
-| Sleeper `stats/clubsoccer:epl` | tackles **won**, interceptions, blocks, accurate crosses, clean sheets, aerials, clearances, dispossessed, own goals | free, no key; same Opta feed Fantrax scores on — overrides API-Football's defensive/gap stats by name match |
-| FPL `bootstrap-static` | cost, ownership (ADP proxy), club, clean-sheet fallback | never FPL points or FPL positions |
-| Fantrax `fxpa/req` | live player pool + draft picks | best-effort, needs a session cookie in `st.secrets["fantrax_cookie"]` |
+| **Fantrax export** (`data/fantrax_players_2025.csv`) | **canonical pool: real 25/26 points, PPG, position, club** | the league's own player export — ground truth; re-export closer to the draft to refresh |
+| Sleeper `stats/clubsoccer:epl` | stat-detail columns (goals, tackles won, clean sheets, crosses, …) via name join | free, no key; same Opta feed Fantrax scores on |
+| API-Football (bundled JSON) | `starter_rate` for the projection's availability term; detail-stat fallback | harvested 2025/26 PL, 537 players |
+| FPL `bootstrap-static` | cost, ownership (ADP proxy), club name | never FPL points or FPL positions |
+| Fantrax `fxpa/req` | live draft board (best-effort) | needs a session cookie in `st.secrets["fantrax_cookie"]` |
 
-**Notes on stat sourcing:** for players matched in Sleeper (by name), the entire
-Fantrax score is computed from Sleeper's raw Opta stats — the same feed Fantrax
-uses — including real tackles *won* (`tkw`). Only players *not* found in Sleeper
-fall back to API-Football, whose total-tackle proxy is discounted by the sidebar
-**tackle-won rate** (default 0.65).
+**Refreshing the pool:** re-export the player list from Fantrax and overwrite
+`data/fantrax_players_2025.csv` (columns `Player, Team, Position, RkOv, FPts,
+FP/G` are what the app reads).
 
-Sleeper's JSON keys are data-verified against the live endpoint and differ from
-its UI glossary abbreviations. Two traps: `cos` is **successful dribbles** (Opta
-"Contests Succeeded"), not clean sheets — clean sheets is `cs`; and `drb`/`ac`
-are empty (the real keys are `cos`/`acnc`). The full crosswalk lives in
-`_SLEEPER_FIELD` in `draft_engine.py`.
+**Sleeper field codes** (for the detail columns) are data-verified and differ
+from Sleeper's UI glossary: `cos` is **successful dribbles** (Opta "Contests
+Succeeded"), not clean sheets — clean sheets is `cs`; `drb`/`ac` are empty (real
+keys `cos`/`acnc`). The crosswalk lives in `_SLEEPER_FIELD` in `draft_engine.py`.
 
 ## Run locally
 
