@@ -101,11 +101,10 @@ _EPL_TEAM: dict[str, str] = {
 }
 
 # ---------------------------------------------------------------------------
-# Fantrax scoring rules — transcribed EXACTLY from THIS LEAGUE's scoring settings
-# (Wiregrass Futbol Association). The league uses a TWO-GROUP system: Goalkeeper
-# vs Outfielder, so D / M / F are identical. (This differs from the Fantrax
-# *default* template, which tiers clean sheets D6/M1/F0 — not what this league
-# uses; here every outfielder gets +6 clean sheets, GK +8.)
+# Fantrax scoring rules for THIS LEAGUE (Wiregrass Futbol Association).
+# Mostly a two-group system (Goalkeeper vs Outfielder, so D/M/F share values),
+# EXCEPT clean sheets, which the commissioner confirmed are tiered:
+# GK 8 · D 6 · M 1 · F 0.
 #
 # Position keys: G(K) / D / M / F. A float applies to all; a dict gives
 # per-position values. Displayed 25/26 points come from the Fantrax export; this
@@ -126,7 +125,7 @@ FANTRAX_SCORING: dict[str, dict | float] = {
     "blocked_shots":        1.5,   # BS
     "clearances":          {"G": 0.25,"D": 0,   "M": 0,   "F": 0},    # CLR
     "aerials_won":         {"G": 1,   "D": 0.5, "M": 0.5, "F": 0.5},  # AER
-    "clean_sheets":        {"G": 8,   "D": 6,   "M": 6,   "F": 6},    # CS (On Field)
+    "clean_sheets":        {"G": 8,   "D": 6,   "M": 1,   "F": 0},    # CS (On Field) — tiered
     "goals_against":       {"G": -2,  "D": 0,   "M": 0,   "F": 0},    # GA / GAO
     # Goalkeeping (GK only)
     "saves":               {"G": 2,   "D": 0,   "M": 0,   "F": 0},    # Sv
