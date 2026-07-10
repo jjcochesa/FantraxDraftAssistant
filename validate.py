@@ -89,28 +89,41 @@ def _fit_position(fx: list, raw_lookup: dict, pos: str) -> None:
     assumption (or a big intercept / candidate coefficient) is the bias source."""
     assumed = dict(_ASSUMED)
     assumed["cs"] = 1.0 if pos == "M" else 0.0
-    feats = list(assumed)
 
-    X, y = [], []
+    # Collect matched raw rows for this position.
+    rows, y = [], []
     for p in fx:
         if p["position"] != pos or p["total_pts"] <= 0:
             continue
         r, _ = de.match_entry(p["name"], raw_lookup)
         if not r:
             continue
-        row = [1.0]  # intercept
-        for f in feats:
-            if f == "rc":
-                row.append(de._num(r.get("rc")) + de._num(r.get("yc2")))
-            else:
-                row.append(de._num(r.get(f)))
-        X.append(row)
+        rows.append(r)
         y.append(p["total_pts"])
 
-    if len(X) < 40:
-        print(f"\n({pos}: only {len(X)} matches — too few to fit.)")
+    if len(rows) < 40:
+        print(f"\n({pos}: only {len(rows)} matches — too few to fit.)")
         return
 
+    # Auto-discover candidate fields: any numeric raw field present on most
+    # players that we DON'T already score (so a missing stat can't hide). Exclude
+    # Sleeper's derived summaries, which would absorb everything.
+    exclude = {"pts_std", "pts_ppr", "rank_std", "rank_ppr", "min", "yc2",
+               "gp", "gms", "gs"}
+    base = [f for f in assumed if f != "rc"] + ["rc"]  # rc handled specially
+    present: dict[str, int] = {}
+    for r in rows:
+        for k, v in r.items():
+            if isinstance(v, (int, float)) and k not in _ASSUMED and k not in exclude \
+                    and not k.startswith("pos_") and not k.endswith("90"):
+                present[k] = present.get(k, 0) + 1
+    candidates = sorted(k for k, c in present.items() if c >= 0.6 * len(rows))
+    feats = base + candidates
+
+    def _val(r, f):
+        return de._num(r.get("rc")) + de._num(r.get("yc2")) if f == "rc" else de._num(r.get(f))
+
+    X = [[1.0] + [_val(r, f) for f in feats] for r in rows]
     coef = _solve_ols(X, y)
     yh = [sum(c * xi for c, xi in zip(coef, row)) for row in X]
     my = sum(y) / len(y)
@@ -119,13 +132,19 @@ def _fit_position(fx: list, raw_lookup: dict, pos: str) -> None:
     r2 = 1 - ss_res / ss_tot if ss_tot else 0
 
     label = {"F": "FORWARDS", "M": "MIDFIELDERS"}[pos]
-    print(f"\n=== Recovered scoring — {label} (n={len(X)}, R²={r2:.3f}) ===")
+    print(f"\n=== Recovered scoring — {label} (n={len(rows)}, R²={r2:.3f}) ===")
     print(f"  intercept (per-season constant): {coef[0]:+.1f}")
-    print(f"  {'stat':6} {'recovered':>10} {'assumed':>8} {'Δ':>7}")
+    print(f"  {'field':10} {'recovered':>10} {'assumed':>8} {'Δ':>7}")
     for i, f in enumerate(feats, start=1):
-        rec, asm = coef[i], assumed[f]
-        flag = "  <-- off" if abs(rec - asm) >= 0.75 and abs(rec) >= 0.4 else ""
-        print(f"  {f:6} {rec:10.2f} {asm:8.1f} {rec - asm:+7.2f}{flag}")
+        rec = coef[i]
+        if f in assumed:                      # a stat we score
+            asm = assumed[f]
+            flag = "  <-- off" if abs(rec - asm) >= 0.75 and abs(rec) >= 0.4 else ""
+            print(f"  {f:10} {rec:10.2f} {asm:8.1f} {rec - asm:+7.2f}{flag}")
+        else:                                 # a candidate we do NOT score
+            avg = sum(_val(r, f) for r in rows) / len(rows)
+            flag = "  <== UNSCORED, carries points" if abs(rec) * avg >= 5 else ""
+            print(f"  {f:10} {rec:10.2f} {'--':>8} {'':>7}  (avg {avg:.1f}){flag}")
 
 
 def _solve_ols(X: list, y: list, ridge: float = 1.0) -> list:
