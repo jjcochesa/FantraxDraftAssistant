@@ -101,40 +101,39 @@ _EPL_TEAM: dict[str, str] = {
 }
 
 # ---------------------------------------------------------------------------
-# Fantrax scoring rules — REFERENCE ONLY.
+# Fantrax scoring rules — transcribed EXACTLY from the league's scoring settings
+# (Fantrax Default Scoring System). Position keys: G(K) / D / M / F. A float
+# applies to every position; a dict gives per-position values.
 #
-# Points are taken directly from the Fantrax export now; this table documents
-# the league's scoring (GK vs D/M/F groups; clean sheets GK 8, all outfield +6)
-# and is no longer used to compute points.
+# Displayed 25/26 points come from the Fantrax export; this table drives the
+# bottom-up validation and the per-stat projection.
 # ---------------------------------------------------------------------------
 FANTRAX_SCORING: dict[str, dict | float] = {
     # Attacking
-    "goals":               {"G": 10,  "D": 9,   "M": 9,   "F": 9},
-    "assists":             {"G": 7,   "D": 6,   "M": 6,   "F": 6},
-    "shots_on_target":      2.0,
-    "key_passes":           2.0,
+    "goals":               {"G": 10,  "D": 10,  "M": 9,   "F": 9},
+    "assists":             {"G": 7,   "D": 7,   "M": 6,   "F": 6},
+    "shots_on_target":      2.0,   # SOT
+    "key_passes":           2.0,   # KP
     "successful_dribbles":  1.0,   # CoS — Contests Succeeded
     "accurate_crosses":     1.0,   # ACNC
-    "penalty_drawn":        {"G": 0,   "D": 2,   "M": 2,   "F": 2},   # PKD
-    # Defensive. Clean sheets are +6 to EVERY outfielder (D/M/F) — verified by
-    # recovering the coefficient from Sleeper stats vs Fantrax FPts (~6 for both
-    # mids and forwards). GK is +8.
-    "clean_sheets":        {"G": 8,   "D": 6,   "M": 6,   "F": 6},
-    "tackles_won":         {"G": 1,   "D": 2,   "M": 2,   "F": 2},    # TKW
-    "interceptions":       {"G": 1,   "D": 1.5, "M": 1.5, "F": 1.5},
-    "blocked_shots":       {"G": 0,   "D": 1.5, "M": 1.5, "F": 1.5},  # BS
-    "aerials_won":         {"G": 1,   "D": 0.5, "M": 0.5, "F": 0.5},  # AER
-    "clearances":          {"G": 0.25,"D": 0,   "M": 0,   "F": 0},    # CLR (GK only in practice)
-    # Goalkeeping
-    "saves":                2.0,
-    "penalties_saved":      8.0,   # PKS
+    "penalty_drawn":        2.0,   # PKD
+    # Defensive
+    "tackles_won":          1.0,   # TkW
+    "interceptions":        1.0,   # Int
+    "blocked_shots":        1.0,   # BS
+    "clearances":           0.25,  # CLR — Effective Clearances
+    "aerials_won":         {"G": 1,   "D": 1,   "M": 0.5, "F": 0.5},  # AER
+    "clean_sheets":        {"G": 6,   "D": 6,   "M": 1,   "F": 0},    # CS
+    "goals_against":       {"G": -2,  "D": -2,  "M": 0,   "F": 0},    # GA(O)
+    # Goalkeeping (GK only)
+    "saves":               {"G": 2,   "D": 0,   "M": 0,   "F": 0},    # Sv
+    "penalties_saved":     {"G": 8,   "D": 0,   "M": 0,   "F": 0},    # PKS
     "high_claims":         {"G": 1,   "D": 0,   "M": 0,   "F": 0},    # HCS
-    "smothers":            {"G": 1,   "D": 0,   "M": 0,   "F": 0},    # SM
-    "goals_against":       {"G": -2,  "D": 0,   "M": 0,   "F": 0},    # GA
+    "smothers":            {"G": 1,   "D": 0,   "M": 0,   "F": 0},    # Sm
     # Negative
-    "yellow_card":         -2.0,
-    "red_card":            -7.0,
-    "own_goals":           -5.0,
+    "yellow_card":         -2.0,   # YC
+    "red_card":            -7.0,   # RC
+    "own_goals":           -5.0,   # OG
     "penalties_missed":    -4.0,   # PKM
     "dispossessed":        -0.5,   # DIS
 }
