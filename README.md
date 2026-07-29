@@ -21,7 +21,9 @@ projects 2026/27 fantasy points under Fantrax scoring and helps you draft.
   cookie is configured.
 - **My Team** — drafted squad, positional caps (G3/D8/M8/F6) and best available
   per position.
-- **ADP / Value** — real ADP (from online drafts) vs projection rank: values vs reaches.
+- **ADP / Value** — real ADP (from online drafts) vs projection rank: values vs
+  reaches, with the expert consensus alongside. Δ is only computed for players
+  that have a projection (players with no 25/26 sample show a blank Δ).
 - **Data-source debug** (expander under Rankings) — per-player detail-stat source
   (Sleeper / API-Football / missing), last-name-only Sleeper matches flagged as
   higher risk (shared surnames first), and the top players missing a Sleeper join
@@ -60,7 +62,8 @@ debug panel.
 | **Fantrax export** (`data/fantrax_players_2025.csv`) | **canonical pool: real 25/26 points, PPG, position, club** | the league's own player export — ground truth; re-export closer to the draft to refresh |
 | Sleeper `stats/clubsoccer:epl` | stat-detail columns (goals, tackles won, clean sheets, crosses, …) via name join | free, no key; same Opta feed Fantrax scores on |
 | API-Football (bundled JSON) | `starter_rate` for the projection's availability term; detail-stat fallback | harvested 2025/26 PL, 537 players |
-| **ADP** (`data/adp.csv`) | **real average draft position** from online Fantrax drafts | built by `build_adp.py` from the draft files in `data/adp_drafts/` |
+| **ADP** (`data/adp.csv`) | **real average draft position** from online Fantrax drafts | built by `build_adp.py` from the draft files in `data/adp_drafts/` (currently 5 mocks: 2×10-team, 3×12-team) |
+| **Expert consensus** (`data/consensus_ranks.csv`) | consensus rank from a 9-specialist panel (+ each expert's best/worst) | `200` in the sheet means "outside my top 150" and is treated as unranked |
 | Fantrax `fxpa/req` | live draft board (best-effort) | needs a session cookie in `st.secrets["fantrax_cookie"]` |
 
 (No FPL — this is a Fantrax app, so ADP comes from real Fantrax drafts, not FPL ownership.)

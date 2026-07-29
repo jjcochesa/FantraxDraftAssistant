@@ -1,0 +1,193 @@
+# 12-team snake, 16 rounds
+Erling Haaland
+Bruno Fernandes
+Cole Palmer
+Antoine Semenyo
+Bukayo Saka
+Dominik Szoboszlai
+Joao Pedro
+Rayan
+Florian Wirtz
+Jeremy Doku
+Alexander Isak
+Morgan Gibbs-White
+Rayan Cherki
+Morgan Rogers
+Declan Rice
+Igor Thiago
+Bryan Mbeumo
+Anton Stach
+Virgil van Dijk
+Matheus Cunha
+Pascal Gross
+Mohammed Kudus
+Bruno Guimaraes
+Enzo Fernandez
+Pedro Porro
+Gabriel Magalhaes
+James Tarkowski
+Daniel Munoz
+Yankuba Minteh
+Elliot Anderson
+James Garner
+Dominic Solanke
+Dango Ouattara
+Cody Gakpo
+Martin Odegaard
+Ollie Watkins
+Pedro Neto
+Harry Wilson
+Neco Williams
+Marcus Tavernier
+Iliman Ndiaye
+Marc Guehi
+Enzo Le Fee
+Jurrien Timber
+Viktor Gyokeres
+Benjamin Sesko
+Ismaila Sarr
+Phil Foden
+Amad Diallo
+Dominic Calvert-Lewin
+Mikkel Damsgaard
+James Maddison
+Antonee Robinson
+Jan-Paul van Hecke
+James Hill
+Youri Tielemans
+Milos Kerkez
+Jean-Philippe Mateta
+Kiernan Dewsbury-Hall
+Patrick Dorgu
+Kevin Schade
+Estevao
+Nico O'Reilly
+Evanilson
+Harvey Barnes
+Eli Kroupi
+Maxence Lacroix
+Matheus Nunes
+Kai Havertz
+Lewis Hall
+Josko Gvardiol
+Reece James
+Riccardo Calafiori
+Rodrigo Muniz
+Jack Grealish
+Nordi Mukiele
+Alex Iwobi
+Mateus Goncalo Espanha Fernandes
+Danny Ballard
+Conor Gallagher
+Adrien Truffert
+Jaidon Anthony
+Brian Brobbey
+Kaoru Mitoma
+Nick Woltemade
+Jeremie Frimpong
+Eberechi Eze
+Chris Richards
+Granit Xhaka
+Savio
+William Osula
+Mathys Tel
+Victor Munoz
+Rio Ngumoha
+Alex Scott
+Justin Kluivert
+Yoane Wissa
+Jack Hinshelwood
+Oliver McBurnie
+Sandro Tonali
+Jarrad Branthwaite
+Luka Vuskovic
+Malick Thiaw
+Alejandro Garnacho
+Adam Wharton
+Igor Jesus
+Michael Kayode
+Yeremy Pino
+Maxim De Cuyper
+Jorrel Hato
+Harry Maguire
+Tyler George
+Callum Hudson-Odoi
+John McGinn
+Kevin
+Diego Gomez
+Oscar Bobb
+Ian Maatsen
+David Raya
+Alexis Mac Allister
+Diogo Dalot
+Danny Welbeck
+Sven Botman
+Rayan Ait-Nouri
+Kobbie Mainoo
+Christos Tzolis
+Levi Colwill
+Noah Okafor
+Jordan Pickford
+Noni Madueke
+Marcos Senesi
+Ferdi Kadioglu
+Anthony Elanga
+Nectarios Angulo
+Omar Marmoush
+Murillo
+Mathias Jensen
+Beto
+Pascal Struijk
+Valentino Livramento
+Alisson
+Omari Hutchinson
+Emiliano Buendia
+Gabriel Martinelli
+Hugo Ekitike
+Jaydee Canvot
+Samuel Chukwueze
+Jake O'Brien
+Tyler Barry
+Nikola Milenkovic
+Moises Caicedo
+Nathan Collins
+Lucas Bergvall
+Ryan Gravenberch
+Jaden Philogene
+Leif Davis
+Jacob Murphy
+Dan Ndoye
+Mats Wieffer
+Milan van Ewijk
+Matty Cash
+Tyrick Mitchell
+Boubacar Kamara
+Yasin Ayari
+Georginio Rutter
+Haji Wright
+Jaka Bijol
+Ola Aina
+Gianluigi Donnarumma
+Joao Gomes
+Matt O'Riley
+Carlos Alcaraz
+Andrew Robertson
+Robin Roefs
+Omar Alderete
+Michael Keane
+Cristhian Mosquera
+Sepp van den Berg
+Piero Hincapie
+Ben Thomas
+Caoimhin Kelleher
+Andrey Santos
+Rodri
+Destiny Udogie
+James Trafford
+Senne Lammens
+William Saliba
+Emiliano Martinez
+Max Dowman
+Dejan Kulusevski
+Egor Yarmolyuk
+Riccardo Rudoni

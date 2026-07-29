@@ -448,6 +448,54 @@ def load_adp(path: str = "data/adp.csv") -> dict[str, dict]:
 
 
 # ---------------------------------------------------------------------------
+# Expert consensus ranks — Top-150 board from a panel of specialists.
+# ---------------------------------------------------------------------------
+
+# Ranks at or above this are the "unranked" sentinel in the consensus sheet.
+_CONSENSUS_UNRANKED = 200
+
+
+def load_consensus(path: str = "data/consensus_ranks.csv") -> dict[str, dict]:
+    """Load the expert consensus board keyed by name (+ variants).
+
+    The sheet's first column holds ``"<rank>: <Player>"``; individual expert
+    columns are their personal ranks with ``200`` meaning "outside my top 150".
+    Returns {} when the file is absent.
+    """
+    p = Path(path)
+    if not p.exists():
+        return {}
+    lookup: dict[str, dict] = {}
+    last_seen: dict[str, set] = {}
+    with p.open(encoding="utf-8-sig", newline="") as fh:
+        reader = csv.DictReader(fh)
+        cols = reader.fieldnames or []
+        name_col = cols[0] if cols else ""
+        skip = {name_col, "Team", "Pos", "Agg.", "+/-"}
+        expert_cols = [c for c in cols if c and c not in skip]
+        for row in reader:
+            raw = (row.get(name_col) or "").strip()
+            if not raw:
+                continue
+            rank_s, _, name = raw.partition(":")
+            name = name.strip() or raw
+            ranks = [_num(row.get(c)) for c in expert_cols]
+            ranked = [r for r in ranks if 0 < r < _CONSENSUS_UNRANKED]
+            entry = {
+                "consensus":      round(_num(row.get("Agg.")), 1) or None,
+                "consensus_rank": int(_num(rank_s)) or None,
+                "n_experts":      len(ranked),
+                "expert_best":    int(min(ranked)) if ranked else None,
+                "expert_worst":   int(max(ranked)) if ranked else None,
+                # busiest-wins tiebreak slot used by _index_entry
+                "minutes":        len(ranked),
+            }
+            _index_entry(lookup, last_seen, name, entry)
+    _flag_ambiguous(lookup, last_seen)
+    return lookup
+
+
+# ---------------------------------------------------------------------------
 # Sleeper API — real tackles-won + defensive stats (same Opta feed as Fantrax).
 # Free, no key. Used to override API-Football's defensive/gap stats ONLY.
 # ---------------------------------------------------------------------------
@@ -566,6 +614,7 @@ def build_player_stats(
     adp_lookup:      Optional[dict] = None,
     sleeper_lookup:  Optional[dict] = None,
     apif_lookup:     Optional[dict] = None,
+    consensus_lookup: Optional[dict] = None,
 ) -> dict[str, dict]:
     """Build enriched records from the canonical Fantrax pool.
 
@@ -577,9 +626,10 @@ def build_player_stats(
 
     Returns {player_key: record}. player_key is the Fantrax id (or norm name).
     """
-    adp_lookup     = adp_lookup or {}
-    sleeper_lookup = sleeper_lookup or {}
-    apif_lookup    = apif_lookup or {}
+    adp_lookup       = adp_lookup or {}
+    sleeper_lookup   = sleeper_lookup or {}
+    apif_lookup      = apif_lookup or {}
+    consensus_lookup = consensus_lookup or {}
 
     # ------------------------------------------------------------------
     # Pass 1 — join enrichment, carry real Fantrax points/PPG/games/position.
@@ -594,11 +644,14 @@ def build_player_stats(
         adp, adp_mt = match_entry(fx["name"], adp_lookup)
         if adp_mt == "lastname":
             adp = None
+        cons, cons_mt = match_entry(fx["name"], consensus_lookup)
+        if cons_mt == "lastname":
+            cons = None
 
         values, source = _detail_source(sl, ap)
         starter_rate = (_num(ap.get("starter_rate")) if ap else 1.0) or 1.0
 
-        interim.append({"fx": fx, "sl": sl, "ap": ap, "adp": adp,
+        interim.append({"fx": fx, "sl": sl, "ap": ap, "adp": adp, "cons": cons,
                         "match_type": s_match,
                         # ambiguous surnames are now refused, so no risky joins remain
                         "ambiguous_last": False,
@@ -641,7 +694,7 @@ def build_player_stats(
     # ------------------------------------------------------------------
     result: dict[str, dict] = {}
     for it in interim:
-        fx, adp, sl = it["fx"], it["adp"], it["sl"]
+        fx, adp, sl, cons = it["fx"], it["adp"], it["sl"], it["cons"]
         pos, games, ppg = fx["position"], fx["games"], fx["ppg"]
         starter_rate = it["starter_rate"]
 
@@ -704,6 +757,12 @@ def build_player_stats(
             "adp_drafts":      adp["n_drafts"] if adp else 0,
             "adp_min":         adp["min_pick"] if adp else None,
             "adp_max":         adp["max_pick"] if adp else None,
+            # Expert consensus board (data/consensus_ranks.csv)
+            "consensus":       cons["consensus"]      if cons else None,
+            "consensus_rank":  cons["consensus_rank"] if cons else None,
+            "n_experts":       cons["n_experts"]      if cons else 0,
+            "expert_best":     cons["expert_best"]    if cons else None,
+            "expert_worst":    cons["expert_worst"]   if cons else None,
             "has_sleeper":     it["sl"] is not None,
             "has_apif":        it["ap"] is not None,
             "match_type":      it["match_type"],
@@ -801,6 +860,7 @@ class FantraxAPI:
 def fetch_sources(fantrax_path: str = "data/fantrax_players_2025.csv",
                   stats_path: str = "data/pl_stats_2025.json",
                   adp_path: str = "data/adp.csv",
+                  consensus_path: str = "data/consensus_ranks.csv",
                   sleeper_year: int = 2025) -> dict:
     """Load all inputs: the bundled Fantrax pool (canonical) + API-Football stats
     + ADP (from online drafts), plus live Sleeper enrichment.
@@ -812,6 +872,7 @@ def fetch_sources(fantrax_path: str = "data/fantrax_players_2025.csv",
     fantrax_players = load_fantrax_players(fantrax_path)
     apif_lookup = build_apif_lookup(load_pl_stats(stats_path))
     adp_lookup  = load_adp(adp_path)
+    consensus_lookup = load_consensus(consensus_path)
 
     sleeper_lookup: Optional[dict] = None
     sleeper_loaded = False
@@ -828,6 +889,7 @@ def fetch_sources(fantrax_path: str = "data/fantrax_players_2025.csv",
         "fantrax_players": fantrax_players,
         "apif_lookup":     apif_lookup,
         "adp_lookup":      adp_lookup,
+        "consensus_lookup": consensus_lookup,
         "sleeper_lookup":  sleeper_lookup,
         "fantrax_loaded":  bool(fantrax_players),
         "apif_loaded":     bool(apif_lookup),
@@ -841,6 +903,7 @@ def build_from_sources(sources: dict) -> dict:
     player_data = build_player_stats(
         sources["fantrax_players"], sources.get("adp_lookup"),
         sources.get("sleeper_lookup"), sources.get("apif_lookup"),
+        sources.get("consensus_lookup"),
     )
     # Validate the stat feed reproduces Fantrax's own points (Sleeper preferred).
     validation = None
@@ -860,6 +923,7 @@ def build_from_sources(sources: dict) -> dict:
         "apif_matched":    sum(1 for d in player_data.values() if d.get("has_apif")),
         "adp_players":     adp_players,
         "adp_drafts":      total_drafts,
+        "consensus_players": sum(1 for d in player_data.values() if d.get("consensus") is not None),
         "num_players":     len(player_data),
     }
 
@@ -899,6 +963,7 @@ class DraftState:
         self.apif_matched    = 0
         self.adp_players     = 0
         self.adp_drafts      = 0
+        self.consensus_players = 0
         self.validation: Optional[dict] = None
 
         # overall_pick_number → {"key": player_key, "slot": int}
@@ -915,6 +980,7 @@ class DraftState:
         self.apif_matched    = db.get("apif_matched", 0)
         self.adp_players     = db.get("adp_players", 0)
         self.adp_drafts      = db.get("adp_drafts", 0)
+        self.consensus_players = db.get("consensus_players", 0)
         self.validation      = db.get("validation")
 
     # -- board geometry -------------------------------------------------
