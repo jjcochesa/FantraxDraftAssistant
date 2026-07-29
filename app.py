@@ -88,24 +88,28 @@ with st.sidebar:
     st.divider()
 
     st.markdown("**Draft setup**")
+    # Explicit keys so these survive reruns. my_slot deliberately uses a FIXED
+    # max: tying it to num_teams changed the widget's identity whenever the team
+    # count changed, which silently reset the slot back to 1.
     num_teams = st.number_input("Number of teams", min_value=2, max_value=30,
-                                value=10, step=1)
+                                value=10, step=1, key="cfg_num_teams")
     num_rounds = st.number_input("Rounds", min_value=1, max_value=30,
-                                 value=16, step=1)
-    my_slot = st.number_input("My draft slot", min_value=1, max_value=int(num_teams),
-                              value=1, step=1)
+                                 value=16, step=1, key="cfg_num_rounds")
+    my_slot = st.number_input("My draft slot", min_value=1, max_value=30,
+                              value=1, step=1, key="cfg_my_slot",
+                              help="Your position in round 1. Picks update below.")
 
-    # Snake pick schedule for this slot: odd rounds run forward, even rounds back.
-    _n, _r, _slot = int(num_teams), int(num_rounds), int(my_slot)
+    _n, _r = int(num_teams), int(num_rounds)
+    if int(my_slot) > _n:
+        st.warning(f"Slot {int(my_slot)} is beyond a {_n}-team league — "
+                   f"using slot {_n}. Lower the slot or raise the team count.")
+    _slot = min(int(my_slot), _n)
+
+    # Snake pick schedule: odd rounds run forward, even rounds back.
     my_picks_all = [
         (rnd - 1) * _n + (_slot if rnd % 2 == 1 else _n + 1 - _slot)
         for rnd in range(1, _r + 1)
     ]
-    st.caption("**Your picks** (snake)")
-    st.markdown(
-        " ".join(f"`R{i}·{p}`" for i, p in enumerate(my_picks_all, 1)),
-        help="Round·overall pick number. Even rounds reverse, so your gap alternates.",
-    )
 
     st.divider()
 
@@ -145,7 +149,7 @@ with st.sidebar:
 ds = _get_draft_state(LEAGUE_ID, int(num_teams), int(num_rounds))
 ds.num_teams = int(num_teams)
 ds.num_rounds = int(num_rounds)
-ds.my_slot = int(my_slot)
+ds.my_slot = _slot
 ds.inject_player_db(player_db)
 
 # Parse DP rankings  {norm_name → rank}
@@ -202,7 +206,28 @@ c1, c2, c3, c4 = st.columns(4)
 c1.metric("Current Pick", f"{ds.current_pick} / {ds.total_picks}")
 c2.metric("Drafted", len(ds.picks))
 c3.metric("Available", available_count)
-c4.metric("My Slot", ds.my_slot or "—")
+c4.metric("My Slot", f"{_slot} of {_n}")
+
+# Your picks, highlighted — the ones still to come are emphasised.
+_done = ds.current_pick
+_chips = []
+for i, pk in enumerate(my_picks_all, 1):
+    if pk < _done:
+        _chips.append(f"<span style='opacity:.35'>R{i}·{pk}</span>")
+    elif pk == _done:
+        _chips.append(f"<span style='background:#1a472a;color:#a8e6a3;"
+                      f"padding:2px 7px;border-radius:4px;font-weight:700'>"
+                      f"R{i}·{pk} ← NOW</span>")
+    else:
+        _chips.append(f"<span style='background:#26324a;color:#cfe0ff;"
+                      f"padding:2px 7px;border-radius:4px'>R{i}·{pk}</span>")
+st.markdown(
+    "**Your picks:** " + " ".join(_chips),
+    unsafe_allow_html=True,
+)
+st.caption(f"Slot {_slot} of {_n}, {_r} rounds · snake order, so your gap "
+           f"alternates between {min(2*(_n-_slot)+1, 2*_slot-1)} and "
+           f"{max(2*(_n-_slot)+1, 2*_slot-1)} picks.")
 st.divider()
 
 
@@ -484,7 +509,7 @@ with tab_ranks:
     st.divider()
     st.subheader("Your pick plan")
     st.caption(
-        f"Slot **{int(my_slot)}** of **{int(num_teams)}** — who the board says should "
+        f"Slot **{_slot}** of **{_n}** — who the board says should "
         "still be there at each of your picks. A player is listed under a pick if his "
         "Board rank lands in that window; **bold** = his board rank is at or after "
         "your pick, so he should survive to you."
