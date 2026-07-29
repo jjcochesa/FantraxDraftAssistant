@@ -968,8 +968,9 @@ def build_player_stats(
             # Blended rank across every board (real drafts + each expert list).
             "blend":           _blend,
             "n_boards":        _nb,
-            # What the draft list is ordered by: your override, else the blend.
-            "board_rank":      (ovr or {}).get("my_rank") or _blend,
+            # The single ranking number: the pooled blend across every board.
+            # Overrides are kept as "my_rank" for reference but no longer reorder.
+            "board_rank":      _blend,
             "has_sleeper":     it["sl"] is not None,
             "has_apif":        it["ap"] is not None,
             "match_type":      it["match_type"],

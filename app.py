@@ -168,7 +168,7 @@ with status_slot.container():
     con_icon = f"✅ {ds.consensus_players}" if ds.consensus_players else "—"
     dp_icon  = f"✅ {len(dp_lookup)}" if dp_lookup else "—"
     st.caption(
-        f"**Board {ds.board_players}** ranked  ·  ADP {adp_icon}  ·  "
+        f"**Blend {ds.board_players}** ranked  ·  ADP {adp_icon}  ·  "
         f"Consensus {con_icon}  ·  Mine {ds.override_players or '—'}  ·  DP {dp_icon}"
     )
     st.caption(
@@ -226,14 +226,13 @@ def _rankings_df(players: list[dict], detail: bool) -> pd.DataFrame:
         norm = _norm_name(p["name"])
         _pr, _t = p.get("pos_rank"), p.get("tier")
         row = {
-            "Board":      p.get("board_rank"),
+            "Blend":      p.get("blend"),
             "Name":       p["name"],
             "Tier":       (f"{POS_LABELS.get(p['position'])}{_t}" if _t else None),
             "PosRk":      (f"{p['position']}{_pr}" if _pr else None),
             "⚠":          "⚠️" if p.get("split") else None,
             "Pos":        POS_LABELS.get(p["position"], p["position"]),
             "Club":       p["team"],
-            "Blend":      p.get("blend"),
             "nB":         p.get("n_boards") or None,
             "ADP":        p.get("adp"),
             "nD":         p.get("adp_drafts") or None,
@@ -259,7 +258,6 @@ def _rankings_column_config(detail: bool) -> dict:
         "Name":       st.column_config.TextColumn("Name", pinned="left", width="medium"),
         "25/26 Pts":  st.column_config.NumberColumn("25/26 Pts", format="%.1f"),
         "PPG":        st.column_config.NumberColumn("PPG", format="%.2f"),
-        "Board":      st.column_config.NumberColumn("Board", format="%.1f", help="Your draft board rank: your override if set, else ADP blended with expert consensus"),
         "Tier":       st.column_config.TextColumn("Tier", help="Positional tier — a new tier starts at a real drop-off in board rank"),
         "PosRk":      st.column_config.TextColumn("PosRk", help="Rank within position"),
         "⚠":          st.column_config.TextColumn("⚠", width="small", help="Sources disagree sharply about this player — see the Tiers & Splits tab"),
@@ -420,14 +418,14 @@ with tab_ranks:
         pos_filter = st.radio("Position", ["All"] + [POS_LABELS[p] for p in POSITION_ORDER],
                               horizontal=True, key="ranks_pos")
     with rc2:
-        sort_mode = st.radio("Sort by", ["Draft board", "25/26 Total", "PPG"],
+        sort_mode = st.radio("Sort by", ["Blend", "25/26 Total", "PPG"],
                              horizontal=True, key="ranks_sort")
     with rc3:
         top_n = st.selectbox("Show", [25, 50, 100, 200], index=1, key="ranks_n")
     with rc4:
         show_detail = st.toggle("Detail cols", value=False, key="ranks_detail")
 
-    sort_field = {"Draft board": "board_rank", "25/26 Total": "total_pts",
+    sort_field = {"Blend": "board_rank", "25/26 Total": "total_pts",
                   "PPG": "ppg"}[sort_mode]
     inv_pos = {v: k for k, v in POS_LABELS.items()}
     pos_arg = None if pos_filter == "All" else inv_pos[pos_filter]
@@ -457,29 +455,28 @@ with tab_ranks:
                      height=min(36 * len(df) + 40, 720))
 
     st.caption(
-        "**Board** = what to draft by: your override if set, otherwise **Blend**. "
-        "**Blend** pools *every* board — each real draft and each expert's list "
-        "counts as one vote (**nB** = how many). **ADP** is the real drafts alone "
-        "(**nD** = how many), **Cons** is the panel's own aggregate. An expert who "
-        f"left a player outside their top 150 still counts, at ~175, so one bullish "
-        "ranking can't leapfrog the field. 25/26 Pts / PPG are last season's actual "
-        "Fantrax numbers — context only, they don't affect the order."
+        "**Blend** is the draft order: every board pooled — each real draft and each "
+        "expert's list counts as one vote (**nB** = how many). **ADP** is the real "
+        "drafts alone (**nD** = how many), **Cons** is the panel's own aggregate. An "
+        "expert who left a player outside their top 150 still counts, at ~175, so one "
+        "bullish ranking can't leapfrog the field. **Mine** shows your overrides for "
+        "reference — they no longer reorder the list. 25/26 Pts / PPG are last "
+        "season's actual Fantrax numbers, context only."
     )
 
     with st.expander("❓ What the columns mean", expanded=False):
         st.markdown("""
 | Column | Meaning |
 | --- | --- |
-| **Board** | **What you draft by.** Your override if you set one, otherwise Blend. Lower = take earlier. |
+| **Blend** | **What you draft by.** Every board pooled — each mock draft and each expert's list counts once. Lower = take earlier. |
 | **Tier** | Positional tier. A new tier starts at a real drop-off, so `DEF1` are interchangeable and `DEF2` is the group after the gap. |
 | **PosRk** | Rank within position — `D7` is the 7th-best defender on the board. |
 | **⚠️** | **Sources disagree sharply about this player.** Either the expert panel and the draft room are 30+ picks apart (with 3+ drafts, so it isn't one stray pick), or his actual picks ranged 45+ places across boards. Not good or bad — just *uncertain*. Check the Tiers & Splits tab for the reason. |
-| **Blend** | Average across **every** board — each mock draft and each expert's list counts once. |
 | **nB** | How many boards he appears on (5 drafts + 9 experts = 14 max). Low nB = thin evidence. |
 | **ADP** | Average pick in the **real mock drafts only** — the best guide to *when he'll actually be gone*. |
 | **nD** | How many real drafts he appeared in. |
 | **Cons** | The expert panel's own published aggregate. Reads harsher than Blend because it counts "unranked" as 200. |
-| **Mine** | Your manual override from `data/my_overrides.csv`. |
+| **Mine** | Your manual override from `data/my_overrides.csv` — shown for reference; it does not reorder the list. |
 | **25/26 Pts / PPG / GW** | Last season's **actual** Fantrax output — context only, does not affect the order. |
 | **DP Rec** | Your hand-written draft order from the sidebar. |
 """)
@@ -614,7 +611,7 @@ with tab_draft:
         pos_a = None if pos_f == "All" else inv_pos[pos_f]
         avail = ds.get_available(pos_a, sort_by="board_rank")[:40]
         rows_a = [{
-            "Board":  p.get("board_rank"),
+            "Blend":  p.get("board_rank"),
             "Player": p["web_name"],
             "ADP":    p.get("adp"),
             "Pos":    POS_LABELS.get(p["position"]),
@@ -627,7 +624,7 @@ with tab_draft:
         st.dataframe(df_a, width='stretch',
                      column_config={
                          "Player": st.column_config.TextColumn("Player", pinned="left"),
-                         "Board": st.column_config.NumberColumn("Board", format="%.1f"),
+                         "Blend": st.column_config.NumberColumn("Blend", format="%.1f"),
                          "ADP": st.column_config.NumberColumn("ADP", format="%.1f"),
                      },
                      height=min(36 * ds.num_rounds + 40, 620))
@@ -657,19 +654,19 @@ with tab_mine:
             "Club":       p["team"],
             "25/26 Pts":  p["total_pts"],
             "PPG":        p["ppg"],
-            "Board":      p.get("board_rank"),
+            "Blend":      p.get("board_rank"),
         } for p in my_picks]
-        df_m = pd.DataFrame(rows_m).sort_values(["Pos", "Board"], ascending=[True, True])
+        df_m = pd.DataFrame(rows_m).sort_values(["Pos", "Blend"], ascending=[True, True])
         df_m.index = range(1, len(df_m) + 1)
         st.dataframe(df_m, width='stretch', column_config={
             "Name": st.column_config.TextColumn("Name", pinned="left"),
             "25/26 Pts": st.column_config.NumberColumn("25/26 Pts", format="%.1f"),
             "PPG": st.column_config.NumberColumn("PPG", format="%.2f"),
-            "Board": st.column_config.NumberColumn("Board", format="%.1f"),
+            "Blend": st.column_config.NumberColumn("Blend", format="%.1f"),
         })
         _bd = [p["board_rank"] for p in my_picks if p.get("board_rank") is not None]
         if _bd:
-            st.caption(f"Average board rank of your picks: **{sum(_bd)/len(_bd):.1f}**")
+            st.caption(f"Average blend rank of your picks: **{sum(_bd)/len(_bd):.1f}**")
 
     # Positional needs → best available per position
     remaining = ds.num_rounds - len(my_picks)
@@ -684,7 +681,7 @@ with tab_mine:
                 norm = _norm_name(p["name"])
                 dp_tag = f" · DP#{dp_lookup[norm]}" if norm in dp_lookup else ""
                 _br = p.get("board_rank")
-                col.markdown(f"- {p['web_name']} *(board {_br:.0f}{dp_tag})*"
+                col.markdown(f"- {p['web_name']} *(blend {_br:.0f}{dp_tag})*"
                              if _br is not None else f"- {p['web_name']} *(unranked{dp_tag})*")
 
 
@@ -713,7 +710,7 @@ with tab_adp:
             adp, cons = p.get("adp"), p.get("consensus")
             gap = round(cons - adp, 1) if (adp is not None and cons is not None) else None
             rows_v.append({
-                "Board":      p.get("board_rank"),
+                "Blend":      p.get("board_rank"),
                 "Name":       p["name"],
                 "Pos":        POS_LABELS.get(p["position"]),
                 "Club":       p["team"],
@@ -726,12 +723,12 @@ with tab_adp:
                 "Mine":       p.get("my_rank"),
                 "DP Rec":     dp_lookup.get(norm),
             })
-        df_v = pd.DataFrame(rows_v).sort_values("Board")
+        df_v = pd.DataFrame(rows_v).sort_values("Blend")
         if not df_v.empty:
             df_v.index = range(1, len(df_v) + 1)
         st.dataframe(df_v, width='stretch', height=680, column_config={
             "Name": st.column_config.TextColumn("Name", pinned="left"),
-            "Board": st.column_config.NumberColumn("Board", format="%.1f"),
+            "Blend": st.column_config.NumberColumn("Blend", format="%.1f"),
             "ADP": st.column_config.NumberColumn("ADP", format="%.1f"),
             "Cons": st.column_config.NumberColumn("Cons", format="%.1f", help="Expert consensus rank"),
             "Mine": st.column_config.NumberColumn("Mine", format="%.1f"),
@@ -803,11 +800,10 @@ with tab_tiers:
     else:
         splits.sort(key=lambda p: -(abs(p.get("panel_gap") or 0)))
         st.dataframe(pd.DataFrame([{
-            "Board":  p.get("board_rank"),
+            "Blend":  p.get("board_rank"),
             "Name":   p["name"],
             "Pos":    POS_LABELS.get(p["position"]),
             "Club":   p["team"],
-            "Blend":  p.get("blend"),
             "ADP":    p.get("adp"),
             "Cons":   p.get("consensus"),
             "Exp":    (f"{p.get('n_experts')}/{(p.get('n_experts') or 0)+(p.get('n_unranked') or 0)}"
@@ -819,7 +815,6 @@ with tab_tiers:
         } for p in splits]), hide_index=True, width="stretch", height=520,
             column_config={
                 "Name":  st.column_config.TextColumn("Name", pinned="left"),
-                "Board": st.column_config.NumberColumn("Board", format="%.1f"),
                 "Blend": st.column_config.NumberColumn("Blend", format="%.1f"),
                 "ADP":   st.column_config.NumberColumn("ADP", format="%.1f"),
                 "Cons":  st.column_config.NumberColumn("Cons", format="%.1f"),

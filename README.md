@@ -50,17 +50,16 @@ With 5 mock drafts and a 9-expert panel, a fully-covered player is the mean of
 top 150 still counts, at ~175 — dropping them would let one bullish ranking
 leapfrog the field.
 
-**Board** is what you draft by: your override if you've set one, otherwise Blend.
+**Blend** is what you draft by — it's the first column and the default sort.
 
 | Column | Meaning |
 | --- | --- |
-| **Board** | what to draft by — your override, else Blend |
-| **Blend** | average across every board (drafts + each expert) |
+| **Blend** | **what to draft by** — average across every board (drafts + each expert) |
 | **nB** | how many boards the player appears on |
 | **ADP** | the real mock drafts alone |
 | **nD** | how many real drafts he appeared in |
 | **Cons** | the panel's own published aggregate (counts unranked as 200, so it reads harsher than Blend) |
-| **Mine** | your manual override |
+| **Mine** | your manual override — shown for reference only, it does not reorder the list |
 
 The list is **not gated on the Fantrax export** — anyone appearing in a draft or
 on the consensus board is included, so players missing from the export snapshot
@@ -72,7 +71,7 @@ not affect the order.
 ### Tiers and disagreement
 
 Within a position, a new **tier** starts wherever the gap to the next player is at
-least 8 board picks (or 1.5x that position's median gap). `next_gap` is the cost
+least 8 blend picks (or 1.5x that position's median gap). `next_gap` is the cost
 of waiting one more pick at that position.
 
 A player is flagged **⚠️ split** when the panel and the room disagree by 30+ picks
@@ -89,8 +88,9 @@ Name,Rank,Note
 Luka Vuskovic,110,Like him 100-120s
 ```
 
-`Rank` is where you want them on your board. Re-run the app (or hit **Reload
-player DB**) to pick it up.
+`Rank` is where you'd take them. This shows up in the **Mine** column as a
+reference note; it deliberately does *not* reorder the list, so Blend stays the
+pure pooled consensus. Re-run the app (or hit **Reload player DB**) to pick it up.
 
 ## Data sources
 
