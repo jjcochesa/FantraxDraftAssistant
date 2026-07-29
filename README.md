@@ -35,20 +35,32 @@ projects 2026/27 fantasy points under Fantrax scoring and helps you draft.
 
 ## How the draft list is built
 
-The board is **consensus-driven — there is no points projection.** Each player's
-**Board** rank comes from:
+The board is **consensus-driven — there is no points projection.**
 
-1. **Your override** (`data/my_overrides.csv`) if you've set one — always wins.
-2. Otherwise **real-draft ADP blended with the expert consensus**, where ADP is
-   weighted by how many drafts the player actually appeared in:
+Every source is treated as **one board, one vote**: each real mock draft you send
+counts once, and each expert on the consensus panel counts once as their own
+board. **Blend** is simply the average pick/rank across all of them:
 
 ```
-board = (n_drafts · ADP  +  2 · consensus_rank) / (n_drafts + 2)
+blend = mean( every real draft pick , every expert's rank )
 ```
 
-So a player seen in 5 drafts is driven mostly by what drafters actually did,
-while someone seen once gets pulled toward the panel. Either source alone is used
-as-is.
+With 5 mock drafts and a 9-expert panel, a fully-covered player is the mean of
+**14 boards** (`nB` shows how many). An expert who left a player *outside* their
+top 150 still counts, at ~175 — dropping them would let one bullish ranking
+leapfrog the field.
+
+**Board** is what you draft by: your override if you've set one, otherwise Blend.
+
+| Column | Meaning |
+| --- | --- |
+| **Board** | what to draft by — your override, else Blend |
+| **Blend** | average across every board (drafts + each expert) |
+| **nB** | how many boards the player appears on |
+| **ADP** | the real mock drafts alone |
+| **nD** | how many real drafts he appeared in |
+| **Cons** | the panel's own published aggregate (counts unranked as 200, so it reads harsher than Blend) |
+| **Mine** | your manual override |
 
 The list is **not gated on the Fantrax export** — anyone appearing in a draft or
 on the consensus board is included, so players missing from the export snapshot

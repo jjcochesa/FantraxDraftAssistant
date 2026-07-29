@@ -221,8 +221,10 @@ def _rankings_df(players: list[dict], detail: bool) -> pd.DataFrame:
             "⚠":          "⚠️" if p.get("split") else None,
             "Pos":        POS_LABELS.get(p["position"], p["position"]),
             "Club":       p["team"],
+            "Blend":      p.get("blend"),
+            "nB":         p.get("n_boards") or None,
             "ADP":        p.get("adp"),
-            "n":          p.get("adp_drafts") or None,
+            "nD":         p.get("adp_drafts") or None,
             "Cons":       p.get("consensus"),
             "Mine":       p.get("my_rank"),
             "25/26 Pts":  p["total_pts"] or None,
@@ -249,9 +251,11 @@ def _rankings_column_config(detail: bool) -> dict:
         "Tier":       st.column_config.TextColumn("Tier", help="Positional tier — a new tier starts at a real drop-off in board rank"),
         "PosRk":      st.column_config.TextColumn("PosRk", help="Rank within position"),
         "⚠":          st.column_config.TextColumn("⚠", width="small", help="Sources disagree sharply about this player — see the Tiers & Splits tab"),
-        "ADP":        st.column_config.NumberColumn("ADP", format="%.1f", help="Average draft position from real online drafts"),
-        "n":          st.column_config.NumberColumn("n", help="How many drafts this player appeared in"),
-        "Cons":       st.column_config.NumberColumn("Cons", format="%.1f", help="Expert consensus rank (panel of specialists)"),
+        "Blend":      st.column_config.NumberColumn("Blend", format="%.1f", help="Average across EVERY board — your real drafts plus each expert's list, one vote each"),
+        "nB":         st.column_config.NumberColumn("nB", help="Total boards this player appears on (drafts + expert lists)"),
+        "ADP":        st.column_config.NumberColumn("ADP", format="%.1f", help="Average draft position from the real drafts only"),
+        "nD":         st.column_config.NumberColumn("nD", help="How many real drafts this player appeared in"),
+        "Cons":       st.column_config.NumberColumn("Cons", format="%.1f", help="Expert panel's own aggregate rank (counts unranked as 200, so it reads harsher than Blend)"),
         "Mine":       st.column_config.NumberColumn("Mine", format="%.1f", help="Your manual override (data/my_overrides.csv)"),
         "DP Rec":     st.column_config.NumberColumn("DP Rec", help="Your recommended draft order (sidebar)"),
     }
@@ -341,10 +345,14 @@ def _render_data_source_debug(ds: DraftState) -> None:
                 src_bits.append(f"your override **{p['my_rank']}**")
             if p.get("adp") is not None:
                 src_bits.append(f"ADP {p['adp']} over {p.get('adp_drafts')} draft(s)")
-            if p.get("consensus") is not None:
-                src_bits.append(f"consensus {p['consensus']}")
+            if p.get("n_experts"):
+                src_bits.append(f"{p['n_experts']} expert list(s)"
+                                + (f" (+{p['n_unranked']} left him unranked)"
+                                   if p.get("n_unranked") else ""))
             st.caption(
                 f"Board rank **{p.get('board_rank') if p.get('board_rank') is not None else '—'}**"
+                + (f" (blend {p['blend']} over {p.get('n_boards')} boards)"
+                   if p.get("blend") is not None else "")
                 + (" — from " + ", ".join(src_bits) if src_bits else " — no draft data yet")
                 + (f"  ·  _{p['my_note']}_" if p.get("my_note") else "")
                 + ("" if p.get("in_pool", True) else "  ·  ⚠️ not in the Fantrax export snapshot")
@@ -437,12 +445,13 @@ with tab_ranks:
                      height=min(36 * len(df) + 40, 720))
 
     st.caption(
-        "**Board** is your draft list rank — your own override if you've set one, "
-        "otherwise real-draft **ADP** blended with the **Cons**ensus panel (ADP "
-        "weighted by how many drafts the player appeared in, so a player seen in "
-        "5 boards outweighs the panel). **n** = drafts seen. **Mine** = your "
-        "override. 25/26 Pts / PPG are Fantrax's actual last-season numbers, shown "
-        "as context only — they do not drive the order."
+        "**Board** = what to draft by: your override if set, otherwise **Blend**. "
+        "**Blend** pools *every* board — each real draft and each expert's list "
+        "counts as one vote (**nB** = how many). **ADP** is the real drafts alone "
+        "(**nD** = how many), **Cons** is the panel's own aggregate. An expert who "
+        f"left a player outside their top 150 still counts, at ~175, so one bullish "
+        "ranking can't leapfrog the field. 25/26 Pts / PPG are last season's actual "
+        "Fantrax numbers — context only, they don't affect the order."
     )
 
     _render_data_source_debug(ds)
@@ -539,6 +548,7 @@ with tab_draft:
         rows_a = [{
             "Board":  p.get("board_rank"),
             "Player": p["web_name"],
+            "ADP":    p.get("adp"),
             "Pos":    POS_LABELS.get(p["position"]),
             "Club":   p["team"],
             "DP":     dp_lookup.get(_norm_name(p["name"])),
@@ -550,6 +560,7 @@ with tab_draft:
                      column_config={
                          "Player": st.column_config.TextColumn("Player", pinned="left"),
                          "Board": st.column_config.NumberColumn("Board", format="%.1f"),
+                         "ADP": st.column_config.NumberColumn("ADP", format="%.1f"),
                      },
                      height=min(36 * ds.num_rounds + 40, 620))
 
@@ -728,8 +739,11 @@ with tab_tiers:
             "Name":   p["name"],
             "Pos":    POS_LABELS.get(p["position"]),
             "Club":   p["team"],
+            "Blend":  p.get("blend"),
             "ADP":    p.get("adp"),
             "Cons":   p.get("consensus"),
+            "Exp":    (f"{p.get('n_experts')}/{(p.get('n_experts') or 0)+(p.get('n_unranked') or 0)}"
+                       if p.get("n_experts") is not None else None),
             "Gap":    p.get("panel_gap"),
             "Picks":  (f"{p.get('adp_min')}–{p.get('adp_max')}" if p.get("adp_min") else None),
             "Spread": p.get("adp_spread"),
@@ -738,8 +752,10 @@ with tab_tiers:
             column_config={
                 "Name":  st.column_config.TextColumn("Name", pinned="left"),
                 "Board": st.column_config.NumberColumn("Board", format="%.1f"),
+                "Blend": st.column_config.NumberColumn("Blend", format="%.1f"),
                 "ADP":   st.column_config.NumberColumn("ADP", format="%.1f"),
                 "Cons":  st.column_config.NumberColumn("Cons", format="%.1f"),
+                "Exp":   st.column_config.TextColumn("Exp", help="Experts who ranked him / total experts"),
                 "Gap":   st.column_config.NumberColumn("Gap", format="%+.1f"),
                 "Why":   st.column_config.TextColumn("Why", width="large"),
             })

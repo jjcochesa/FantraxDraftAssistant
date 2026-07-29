@@ -481,7 +481,8 @@ def load_consensus(path: str = "data/consensus_ranks.csv") -> dict[str, dict]:
             rank_s, _, name = raw.partition(":")
             name = name.strip() or raw
             ranks = [_num(row.get(c)) for c in expert_cols]
-            ranked = [r for r in ranks if 0 < r < _CONSENSUS_UNRANKED]
+            ranked_all = [r for r in ranks if r > 0]
+            ranked = [r for r in ranked_all if r < _CONSENSUS_UNRANKED]
             entry = {
                 "display_name":   name,
                 "team_code":      (row.get("Team") or "").strip().upper(),
@@ -489,6 +490,8 @@ def load_consensus(path: str = "data/consensus_ranks.csv") -> dict[str, dict]:
                 "consensus":      round(_num(row.get("Agg.")), 1) or None,
                 "consensus_rank": int(_num(rank_s)) or None,
                 "n_experts":      len(ranked),
+                "expert_ranks":   ranked,
+                "n_unranked":     len(ranked_all) - len(ranked),
                 "expert_best":    int(min(ranked)) if ranked else None,
                 "expert_worst":   int(max(ranked)) if ranked else None,
                 # busiest-wins tiebreak slot used by _index_entry
@@ -584,28 +587,39 @@ def load_overrides(path: str = "data/my_overrides.csv") -> dict[str, dict]:
     return lookup
 
 
-# How much weight the expert-consensus board carries against the real drafts,
-# expressed in "equivalent number of drafts". Real draft boards are the primary
-# signal, so the panel counts for a couple of drafts' worth.
-CONSENSUS_WEIGHT = 2.0
+# Where an expert who left a player OUT of their top 150 is counted. Dropping
+# them entirely would bias the blend toward whichever experts happened to be
+# bullish; the source sheet uses a hard 200, which over-punishes. Just past the
+# 150-deep board is the honest reading of "not in my top 150".
+UNRANKED_VALUE = 175.0
 
 
 def _blend_rank(adp: Optional[float], n_drafts: int,
-                consensus: Optional[float]) -> Optional[float]:
-    """Combine real-draft ADP with the expert consensus into one board rank.
+                expert_ranks: Optional[list],
+                n_unranked: int = 0) -> tuple[Optional[float], int]:
+    """Pool real draft picks and expert rankings into one average, treating each
+    expert's ranking as another draft board.
 
-    ADP is weighted by how many drafts a player actually appeared in, so a player
-    seen in 5 drafts outweighs the panel, while a player seen once is pulled
-    toward it. Either source alone is used as-is.
+    Every board counts once — no weighting constant — so a player in 5 drafts and
+    9 expert lists is the mean of all 14. Experts who left the player unranked
+    still count, at ``UNRANKED_VALUE``, so a player one bull ranked highly can't
+    leapfrog the field on a sample of one.
+
+    Returns (blended_rank, n_boards).
     """
-    if adp is not None and consensus is not None:
-        w = float(max(n_drafts, 1))
-        return round((w * adp + CONSENSUS_WEIGHT * consensus) / (w + CONSENSUS_WEIGHT), 1)
-    if adp is not None:
-        return round(adp, 1)
-    if consensus is not None:
-        return round(consensus, 1)
-    return None
+    total, n = 0.0, 0
+    if adp is not None and n_drafts > 0:
+        total += adp * n_drafts          # mean x count recovers the pick sum
+        n += n_drafts
+    if expert_ranks:
+        total += float(sum(expert_ranks))
+        n += len(expert_ranks)
+    if n_unranked:
+        total += UNRANKED_VALUE * n_unranked
+        n += n_unranked
+    if n == 0:
+        return None, 0
+    return round(total / n, 1), n
 
 
 # ---------------------------------------------------------------------------
@@ -898,6 +912,13 @@ def build_player_stats(
             projected_pts = proj_ppg
             proj_method = "ppg" if proj_ppg > 0 else "none"
 
+        _blend, _nb = _blend_rank(
+            adp["adp"] if adp else None,
+            adp["n_drafts"] if adp else 0,
+            (cons or {}).get("expert_ranks"),
+            (cons or {}).get("n_unranked", 0),
+        )
+
         vals = it["values"]
         key = fx["fantrax_id"] or _norm_name(fx["name"])
         result[key] = {
@@ -941,13 +962,14 @@ def build_player_stats(
             "consensus":       cons["consensus"]      if cons else None,
             "consensus_rank":  cons["consensus_rank"] if cons else None,
             "n_experts":       cons["n_experts"]      if cons else 0,
+            "n_unranked":      cons["n_unranked"]     if cons else 0,
             "expert_best":     cons["expert_best"]    if cons else None,
             "expert_worst":    cons["expert_worst"]   if cons else None,
-            # Consensus board rank — what the draft list is ordered by.
-            "board_rank":      ((ovr or {}).get("my_rank")
-                                or _blend_rank(adp["adp"] if adp else None,
-                                               adp["n_drafts"] if adp else 0,
-                                               cons["consensus"] if cons else None)),
+            # Blended rank across every board (real drafts + each expert list).
+            "blend":           _blend,
+            "n_boards":        _nb,
+            # What the draft list is ordered by: your override, else the blend.
+            "board_rank":      (ovr or {}).get("my_rank") or _blend,
             "has_sleeper":     it["sl"] is not None,
             "has_apif":        it["ap"] is not None,
             "match_type":      it["match_type"],
@@ -1116,6 +1138,7 @@ def build_from_sources(sources: dict) -> dict:
         "adp_drafts":      total_drafts,
         "consensus_players": sum(1 for d in player_data.values() if d.get("consensus") is not None),
         "board_players":   sum(1 for d in player_data.values() if d.get("board_rank") is not None),
+        "max_boards":      max((d.get("n_boards") or 0 for d in player_data.values()), default=0),
         "override_players": sum(1 for d in player_data.values() if d.get("my_rank") is not None),
         "off_pool_players": sum(1 for d in player_data.values() if not d.get("in_pool", True)),
         "num_players":     len(player_data),
@@ -1159,6 +1182,7 @@ class DraftState:
         self.adp_drafts      = 0
         self.consensus_players = 0
         self.board_players     = 0
+        self.max_boards        = 0
         self.override_players  = 0
         self.off_pool_players  = 0
         self.validation: Optional[dict] = None
@@ -1179,6 +1203,7 @@ class DraftState:
         self.adp_drafts      = db.get("adp_drafts", 0)
         self.consensus_players = db.get("consensus_players", 0)
         self.board_players     = db.get("board_players", 0)
+        self.max_boards        = db.get("max_boards", 0)
         self.override_players  = db.get("override_players", 0)
         self.off_pool_players  = db.get("off_pool_players", 0)
         self.validation      = db.get("validation")
