@@ -24,6 +24,10 @@ projects 2026/27 fantasy points under Fantrax scoring and helps you draft.
 - **ADP / Value** — real ADP (from online drafts) vs projection rank: values vs
   reaches, with the expert consensus alongside. Δ is only computed for players
   that have a projection (players with no 25/26 sample show a blank Δ).
+- **Tiers & Splits** — each position grouped into tiers by board rank, split at
+  real drop-offs, with the gap to the next player at that position (⛰️ marks a
+  10+ pick cliff, so you know when waiting costs you). Below it, the players the
+  expert panel and the draft room disagree about most.
 - **Data-source debug** (expander under Rankings) — per-player detail-stat source
   (Sleeper / API-Football / missing), last-name-only Sleeper matches flagged as
   higher risk (shared surnames first), and the top players missing a Sleeper join
@@ -52,6 +56,17 @@ on the consensus board is included, so players missing from the export snapshot
 
 Last season's Fantrax points/PPG are still displayed as **context only**; they do
 not affect the order.
+
+### Tiers and disagreement
+
+Within a position, a new **tier** starts wherever the gap to the next player is at
+least 8 board picks (or 1.5x that position's median gap). `next_gap` is the cost
+of waiting one more pick at that position.
+
+A player is flagged **⚠️ split** when the panel and the room disagree by 30+ picks
+(needs 3+ drafts — one pick is noise) or when his actual picks spanned 45+ places.
+`Gap` = consensus − ADP: positive means the room takes him earlier than the panel
+rates him; negative means he falls past the panel's rank.
 
 ### Overriding a player
 

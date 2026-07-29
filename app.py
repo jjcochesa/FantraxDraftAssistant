@@ -212,9 +212,13 @@ def _rankings_df(players: list[dict], detail: bool) -> pd.DataFrame:
     rows = []
     for p in players:
         norm = _norm_name(p["name"])
+        _pr, _t = p.get("pos_rank"), p.get("tier")
         row = {
             "Board":      p.get("board_rank"),
             "Name":       p["name"],
+            "Tier":       (f"{POS_LABELS.get(p['position'])}{_t}" if _t else None),
+            "PosRk":      (f"{p['position']}{_pr}" if _pr else None),
+            "⚠":          "⚠️" if p.get("split") else None,
             "Pos":        POS_LABELS.get(p["position"], p["position"]),
             "Club":       p["team"],
             "ADP":        p.get("adp"),
@@ -242,6 +246,9 @@ def _rankings_column_config(detail: bool) -> dict:
         "25/26 Pts":  st.column_config.NumberColumn("25/26 Pts", format="%.1f"),
         "PPG":        st.column_config.NumberColumn("PPG", format="%.2f"),
         "Board":      st.column_config.NumberColumn("Board", format="%.1f", help="Your draft board rank: your override if set, else ADP blended with expert consensus"),
+        "Tier":       st.column_config.TextColumn("Tier", help="Positional tier — a new tier starts at a real drop-off in board rank"),
+        "PosRk":      st.column_config.TextColumn("PosRk", help="Rank within position"),
+        "⚠":          st.column_config.TextColumn("⚠", width="small", help="Sources disagree sharply about this player — see the Tiers & Splits tab"),
         "ADP":        st.column_config.NumberColumn("ADP", format="%.1f", help="Average draft position from real online drafts"),
         "n":          st.column_config.NumberColumn("n", help="How many drafts this player appeared in"),
         "Cons":       st.column_config.NumberColumn("Cons", format="%.1f", help="Expert consensus rank (panel of specialists)"),
@@ -379,8 +386,8 @@ def _render_data_source_debug(ds: DraftState) -> None:
 # Tabs
 # ---------------------------------------------------------------------------
 
-tab_ranks, tab_draft, tab_mine, tab_adp = st.tabs(
-    ["📊 Rankings", "🐍 Live Draft", "👤 My Team", "📈 ADP / Value"]
+tab_ranks, tab_draft, tab_mine, tab_adp, tab_tiers = st.tabs(
+    ["📊 Rankings", "🐍 Live Draft", "👤 My Team", "📈 ADP / Value", "🪜 Tiers & Splits"]
 )
 
 
@@ -652,3 +659,87 @@ with tab_adp:
             "Δ (Cons−ADP)": st.column_config.NumberColumn(
                 "Δ (Cons−ADP)", help="Positive = room drafts earlier than the panel rates them; negative = they fall past the panel's rank"),
         })
+
+
+# ── Tiers & Splits ──────────────────────────────────────────────────────────
+with tab_tiers:
+    st.subheader("Positional tiers")
+    st.caption(
+        "Players at each position grouped by board rank, split wherever there's a "
+        "real drop-off. **Next gap** is how many board picks separate a player from "
+        "the next one at his position — a big gap means waiting costs you, a small "
+        "one means you can safely take another position first."
+    )
+
+    avail_t = ds.get_available(sort_by="board_rank")
+    ranked_t = [p for p in avail_t if p.get("board_rank") is not None]
+
+    if not ranked_t:
+        st.info("No board ranks yet — add drafts to data/adp_drafts/ and run build_adp.py.")
+    else:
+        show_taken = st.toggle("Only show players still available", value=True,
+                               key="_tiers_avail_only")
+        pool_t = ranked_t if show_taken else [
+            p for p in ({**d, "_key": k} for k, d in ds.player_data.items())
+            if p.get("board_rank") is not None
+        ]
+
+        cols_t = st.columns(len(POSITION_ORDER))
+        for col, pos in zip(cols_t, POSITION_ORDER):
+            grp = sorted((p for p in pool_t if p["position"] == pos),
+                         key=lambda x: x["board_rank"])
+            col.markdown(f"### {POS_LABELS[pos]}")
+            if not grp:
+                col.caption("none left")
+                continue
+            cur_tier = None
+            for p in grp[:22]:
+                if p.get("tier") != cur_tier:
+                    cur_tier = p.get("tier")
+                    col.markdown(f"**Tier {cur_tier}**")
+                gap = p.get("next_gap")
+                cliff = " ⛰️" if (gap is not None and gap >= 10) else ""
+                flag = " ⚠️" if p.get("split") else ""
+                mine = " 📌" if p.get("my_rank") is not None else ""
+                col.markdown(
+                    f"<span style='font-size:0.86em'>"
+                    f"<code>{p['board_rank']:>5.1f}</code> {p['web_name']}"
+                    f"{mine}{flag}{cliff}</span>",
+                    unsafe_allow_html=True,
+                )
+        st.caption("⛰️ = 10+ pick gap to the next player at that position (a cliff)  ·  "
+                   "⚠️ = sources disagree  ·  📌 = your override")
+
+    st.divider()
+    st.subheader("Where the sources disagree")
+    st.caption(
+        "Players the expert panel and the draft room see very differently, or whose "
+        "actual picks ranged widely. **Gap** = consensus − ADP: positive means the "
+        "room takes him earlier than the panel rates him (the room is high on him); "
+        "negative means he falls past where the panel would have him (possible value)."
+    )
+    splits = [p for p in ranked_t if p.get("split")]
+    if not splits:
+        st.info("No sharp disagreements flagged yet.")
+    else:
+        splits.sort(key=lambda p: -(abs(p.get("panel_gap") or 0)))
+        st.dataframe(pd.DataFrame([{
+            "Board":  p.get("board_rank"),
+            "Name":   p["name"],
+            "Pos":    POS_LABELS.get(p["position"]),
+            "Club":   p["team"],
+            "ADP":    p.get("adp"),
+            "Cons":   p.get("consensus"),
+            "Gap":    p.get("panel_gap"),
+            "Picks":  (f"{p.get('adp_min')}–{p.get('adp_max')}" if p.get("adp_min") else None),
+            "Spread": p.get("adp_spread"),
+            "Why":    p.get("split_why"),
+        } for p in splits]), hide_index=True, width="stretch", height=520,
+            column_config={
+                "Name":  st.column_config.TextColumn("Name", pinned="left"),
+                "Board": st.column_config.NumberColumn("Board", format="%.1f"),
+                "ADP":   st.column_config.NumberColumn("ADP", format="%.1f"),
+                "Cons":  st.column_config.NumberColumn("Cons", format="%.1f"),
+                "Gap":   st.column_config.NumberColumn("Gap", format="%+.1f"),
+                "Why":   st.column_config.TextColumn("Why", width="large"),
+            })

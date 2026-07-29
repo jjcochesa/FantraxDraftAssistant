@@ -668,6 +668,93 @@ def _detail_source(sl: Optional[dict], apif_rec: Optional[dict]) -> tuple[dict, 
     return values, source
 
 
+# A new positional tier starts when the gap to the next-best player at that
+# position is at least this many board picks, or 1.5x the position's median gap —
+# whichever is larger. Big gap = real drop-off, so waiting costs you.
+TIER_MIN_GAP = 8.0
+
+
+def _assign_tiers(result: dict[str, dict]) -> None:
+    """Assign positional rank (D1, D2, …) and tier numbers from board-rank gaps.
+
+    Within each position, players are ordered by board rank and split wherever the
+    gap to the next player is unusually large — that gap is the drop-off, so it
+    tells you whether the "next best" at a position is a real step down.
+    """
+    by_pos: dict[str, list] = {}
+    for d in result.values():
+        if d.get("board_rank") is not None:
+            by_pos.setdefault(d["position"], []).append(d)
+
+    for pos, players in by_pos.items():
+        players.sort(key=lambda x: x["board_rank"])
+        gaps = [players[i + 1]["board_rank"] - players[i]["board_rank"]
+                for i in range(len(players) - 1)]
+        if gaps:
+            srt = sorted(gaps)
+            med = srt[len(srt) // 2]
+        else:
+            med = 0.0
+        threshold = max(TIER_MIN_GAP, 1.5 * med)
+
+        tier = 1
+        tier_start = 0
+        for i, d in enumerate(players):
+            if i > 0:
+                gap = d["board_rank"] - players[i - 1]["board_rank"]
+                if gap >= threshold:
+                    # close out the previous tier
+                    for j in range(tier_start, i):
+                        players[j]["tier_size"] = i - tier_start
+                    tier += 1
+                    tier_start = i
+            d["pos_rank"] = i + 1
+            d["tier"] = tier
+            # gap to the NEXT player at this position — the cost of waiting
+            d["next_gap"] = (round(players[i + 1]["board_rank"] - d["board_rank"], 1)
+                             if i + 1 < len(players) else None)
+        for j in range(tier_start, len(players)):
+            players[j]["tier_size"] = len(players) - tier_start
+
+
+# Flag a player as "split" when the panel and the draft room disagree by at least
+# this many picks, or when their actual draft picks span at least this range.
+SPLIT_PANEL_GAP = 30.0
+SPLIT_DRAFT_RANGE = 45.0
+# A player needs to appear in at least this many drafts before we'll claim the
+# room disagrees with the panel — one pick is noise, not a trend.
+SPLIT_MIN_DRAFTS = 3
+
+
+def _assign_disagreement(result: dict[str, dict]) -> None:
+    """Compute how much sources disagree about a player, and flag the big splits.
+
+    Three independent spreads: panel-vs-room (consensus minus ADP), how widely
+    the actual picks ranged, and how far apart the individual experts were.
+    """
+    for d in result.values():
+        adp, cons = d.get("adp"), d.get("consensus")
+        lo, hi = d.get("adp_min"), d.get("adp_max")
+        eb, ew = d.get("expert_best"), d.get("expert_worst")
+
+        d["panel_gap"] = round(cons - adp, 1) if (adp is not None and cons is not None) else None
+        d["adp_spread"] = (hi - lo) if (lo is not None and hi is not None) else None
+        d["expert_spread"] = (ew - eb) if (eb is not None and ew is not None) else None
+
+        reasons = []
+        pg = d["panel_gap"]
+        n = d.get("adp_drafts") or 0
+        if pg is not None and abs(pg) >= SPLIT_PANEL_GAP and n >= SPLIT_MIN_DRAFTS:
+            reasons.append("room drafts him well before the panel rates him"
+                           if pg > 0 else
+                           "panel rates him well above where the room takes him")
+        if (d["adp_spread"] is not None and d["adp_spread"] >= SPLIT_DRAFT_RANGE
+                and n >= 2):
+            reasons.append(f"picks ranged {lo}-{hi} across drafts")
+        d["split"] = bool(reasons)
+        d["split_why"] = "; ".join(reasons) or None
+
+
 def build_player_stats(
     fantrax_players: list[dict],
     adp_lookup:      Optional[dict] = None,
@@ -867,6 +954,9 @@ def build_player_stats(
             "ambiguous_last":  it["ambiguous_last"],
             "_detail_source":  it["source"],
         }
+
+    _assign_tiers(result)
+    _assign_disagreement(result)
 
     # ADP rank: ordinal position by average draft pick (earliest picked = 1).
     ranked = sorted(
