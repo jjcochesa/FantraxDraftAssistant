@@ -95,6 +95,18 @@ with st.sidebar:
     my_slot = st.number_input("My draft slot", min_value=1, max_value=int(num_teams),
                               value=1, step=1)
 
+    # Snake pick schedule for this slot: odd rounds run forward, even rounds back.
+    _n, _r, _slot = int(num_teams), int(num_rounds), int(my_slot)
+    my_picks_all = [
+        (rnd - 1) * _n + (_slot if rnd % 2 == 1 else _n + 1 - _slot)
+        for rnd in range(1, _r + 1)
+    ]
+    st.caption("**Your picks** (snake)")
+    st.markdown(
+        " ".join(f"`R{i}·{p}`" for i, p in enumerate(my_picks_all, 1)),
+        help="Round·overall pick number. Even rounds reverse, so your gap alternates.",
+    )
+
     st.divider()
 
     st.markdown("**DP Recommended rankings**")
@@ -109,7 +121,7 @@ with st.sidebar:
     auto_col, clear_col = st.columns(2)
     with auto_col:
         if st.button("🤖 Auto-rank", width='stretch',
-                     help="Generate DP rankings from the projection model"):
+                     help="Fill the DP list from the consensus draft board"):
             st.session_state["_trigger_auto_dp"] = True
             st.rerun()
     with clear_col:
@@ -454,6 +466,62 @@ with tab_ranks:
         "Fantrax numbers — context only, they don't affect the order."
     )
 
+    with st.expander("❓ What the columns mean", expanded=False):
+        st.markdown("""
+| Column | Meaning |
+| --- | --- |
+| **Board** | **What you draft by.** Your override if you set one, otherwise Blend. Lower = take earlier. |
+| **Tier** | Positional tier. A new tier starts at a real drop-off, so `DEF1` are interchangeable and `DEF2` is the group after the gap. |
+| **PosRk** | Rank within position — `D7` is the 7th-best defender on the board. |
+| **⚠️** | **Sources disagree sharply about this player.** Either the expert panel and the draft room are 30+ picks apart (with 3+ drafts, so it isn't one stray pick), or his actual picks ranged 45+ places across boards. Not good or bad — just *uncertain*. Check the Tiers & Splits tab for the reason. |
+| **Blend** | Average across **every** board — each mock draft and each expert's list counts once. |
+| **nB** | How many boards he appears on (5 drafts + 9 experts = 14 max). Low nB = thin evidence. |
+| **ADP** | Average pick in the **real mock drafts only** — the best guide to *when he'll actually be gone*. |
+| **nD** | How many real drafts he appeared in. |
+| **Cons** | The expert panel's own published aggregate. Reads harsher than Blend because it counts "unranked" as 200. |
+| **Mine** | Your manual override from `data/my_overrides.csv`. |
+| **25/26 Pts / PPG / GW** | Last season's **actual** Fantrax output — context only, does not affect the order. |
+| **DP Rec** | Your hand-written draft order from the sidebar. |
+""")
+
+    st.divider()
+    st.subheader("Your pick plan")
+    st.caption(
+        f"Slot **{int(my_slot)}** of **{int(num_teams)}** — who the board says should "
+        "still be there at each of your picks. A player is listed under a pick if his "
+        "Board rank lands in that window; **bold** = his board rank is at or after "
+        "your pick, so he should survive to you."
+    )
+    _ranked_pp = sorted(
+        (p for p in ds.get_available(sort_by="board_rank")
+         if p.get("board_rank") is not None),
+        key=lambda x: x["board_rank"],
+    )
+    if not _ranked_pp:
+        st.info("No board ranks yet.")
+    else:
+        _picks = my_picks_all[:8]
+        _cols = st.columns(min(4, len(_picks)))
+        for i, pk in enumerate(_picks):
+            nxt = _picks[i + 1] if i + 1 < len(_picks) else pk + int(num_teams) * 2
+            col = _cols[i % len(_cols)]
+            # candidates whose board rank sits in this pick's neighbourhood
+            cands = [p for p in _ranked_pp if pk - 4 <= p["board_rank"] < nxt][:7]
+            col.markdown(f"**R{i+1} · pick {pk}**")
+            if not cands:
+                col.caption("—")
+            for p in cands:
+                safe = p["board_rank"] >= pk
+                nm = f"**{p['web_name']}**" if safe else p["web_name"]
+                col.markdown(
+                    f"<span style='font-size:0.85em'>{nm} "
+                    f"<code>{p['board_rank']:.0f}</code> "
+                    f"{POS_LABELS.get(p['position'])}"
+                    f"{' ⚠️' if p.get('split') else ''}</span>",
+                    unsafe_allow_html=True,
+                )
+
+    st.divider()
     _render_data_source_debug(ds)
 
 
