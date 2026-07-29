@@ -7,8 +7,8 @@ reserve + 1 IR), positions G/D/M/F.
 
 Points, PPG and positions come straight from the bundled Fantrax export
 (data/fantrax_players_2025.csv) — ground truth. Sleeper / API-Football supply
-the stat-detail columns and starter rate; FPL supplies cost / ownership (an ADP
-proxy until Fantrax community drafts start).
+the stat-detail columns and starter rate; ADP comes from real online drafts
+aggregated in data/adp.csv (see build_adp.py).
 
 Caching:
   @st.cache_data(ttl=3600)  — player DB (bundled Fantrax pool + enrichment)
@@ -49,7 +49,7 @@ POS_LABELS = {"G": "GK", "D": "DEF", "M": "MID", "F": "FWD"}
 
 @st.cache_data(ttl=3600, show_spinner="Loading player database…")
 def _load_player_db() -> dict:
-    """Load the Fantrax pool + enrichment (FPL/Sleeper). Cached for an hour."""
+    """Load the Fantrax pool + enrichment (Sleeper, ADP). Cached for an hour."""
     return fetch_player_db()
 
 
@@ -60,7 +60,7 @@ def _get_draft_state(league_id: str, num_teams: int, num_rounds: int) -> DraftSt
 
 def _auto_dp_score(p: dict) -> float:
     """Primary signal is projected_pts. Players with no projection fall to the
-    bottom, ordered by Fantrax rank (last season) then ownership."""
+    bottom, ordered by last season's Fantrax rank."""
     proj = p.get("projected_pts") or 0.0
     if proj > 0:
         return proj
@@ -155,12 +155,12 @@ if dp_text.strip():
 
 with status_slot.container():
     fx_icon  = "✅" if ds.fantrax_loaded else "❌"
-    fpl_icon = "✅" if ds.fpl_loaded else "⚠️"
     slp_icon = f"✅ {ds.sleeper_matched}" if ds.sleeper_loaded else "⚠️"
+    adp_icon = f"✅ {ds.adp_players} ({ds.adp_drafts} drafts)" if ds.adp_players else "—"
     dp_icon  = f"✅ {len(dp_lookup)}" if dp_lookup else "—"
     st.caption(
         f"Fantrax {fx_icon} {player_db.get('num_players', 0)}  ·  "
-        f"Sleeper {slp_icon}  ·  FPL {fpl_icon}  ·  DP {dp_icon}"
+        f"Sleeper {slp_icon}  ·  ADP {adp_icon}  ·  DP {dp_icon}"
     )
     if not ds.fantrax_loaded:
         st.error("Fantrax pool (data/fantrax_players_2025.csv) not found — "
@@ -173,13 +173,9 @@ with status_slot.container():
         if ds.sleeper_error:
             with st.expander("Sleeper error"):
                 st.code(ds.sleeper_error, language=None)
-    if not ds.fpl_loaded:
-        st.caption(
-            "⚠️ FPL not reachable — cost and ownership (ADP proxy) are unavailable."
-        )
-        if ds.fpl_error:
-            with st.expander("FPL error"):
-                st.code(ds.fpl_error, language=None)
+    if not ds.adp_players:
+        st.caption("ADP: no drafts collected yet — add drafts to data/adp_drafts/ "
+                   "and run build_adp.py to populate the ADP column.")
 
 
 # ---------------------------------------------------------------------------
@@ -221,9 +217,8 @@ def _rankings_df(players: list[dict], detail: bool) -> pd.DataFrame:
             "PPG":        p["ppg"],
             "GW":         p["games"],
             "26/27 Proj": p["projected_pts"],
-            "ADP":        p.get("adp_rank"),
+            "ADP":        p.get("adp"),
             "DP Rec":     dp_lookup.get(norm),
-            "Own%":       p.get("ownership_pct"),
         }
         if detail:
             for label, field in DETAIL_FIELDS:
@@ -241,8 +236,7 @@ def _rankings_column_config(detail: bool) -> dict:
         "25/26 Pts":  st.column_config.NumberColumn("25/26 Pts", format="%.1f"),
         "PPG":        st.column_config.NumberColumn("PPG", format="%.2f"),
         "26/27 Proj": st.column_config.NumberColumn("26/27 Proj", format="%.1f"),
-        "Own%":       st.column_config.NumberColumn("Own%", format="%.1f"),
-        "ADP":        st.column_config.NumberColumn("ADP", help="FPL ownership rank (proxy until Fantrax drafts start)"),
+        "ADP":        st.column_config.NumberColumn("ADP", format="%.1f", help="Average draft position from online drafts (blank until drafts are added)"),
         "DP Rec":     st.column_config.NumberColumn("DP Rec", help="Your recommended draft order (sidebar)"),
     }
     return cfg
@@ -322,7 +316,7 @@ def _render_data_source_debug(ds: DraftState) -> None:
                 f"**{p['name']}** — {POS_LABELS.get(p['position'])} · {p['team']} · "
                 f"{p['total_pts']} pts (Fantrax)  |  Sleeper: {badge}  ·  "
                 f"API-Football: {'✅' if p.get('has_apif') else '—'}  ·  "
-                f"FPL: {'✅' if p.get('has_fpl') else '—'}"
+                f"ADP: {p['adp'] if p.get('adp') is not None else '—'}"
             )
             st.caption(
                 f"26/27 projection: **{p.get('projected_pts')}** via *{pm}*  ·  "
@@ -418,8 +412,8 @@ with tab_ranks:
         "harder than stable ones like tackles), scaled to 34 GWs × a starter-rate "
         "availability term, and scored with Fantrax rules. Players without Sleeper "
         "stats fall back to a PPG-based projection. Detail stats: Sleeper (Opta), "
-        "API-Football fallback. **ADP / Own%** = FPL ownership proxy until Fantrax "
-        "community drafts open."
+        "API-Football fallback. **ADP** = average draft position from real online "
+        "drafts (blank until drafts are added — see the ADP / Value tab)."
     )
 
     _render_data_source_debug(ds)
@@ -586,38 +580,49 @@ with tab_mine:
 with tab_adp:
     st.subheader("ADP / Value")
     st.caption(
-        "Compares each player's projection rank against the community ADP proxy "
-        "(FPL ownership). **Own Rank − Proj Rank** > 0 means the crowd rates a "
-        "player *higher* than your Fantrax projection (potential reach); < 0 means "
-        "the projection likes them more than the crowd (potential value). Real "
-        "Fantrax ADP replaces this once community drafts open in August."
+        "Real **ADP** (average draft position) aggregated from online drafts vs "
+        "your projection rank. **ADP − Proj Rank** > 0 = the field drafts them "
+        "*later* than your projection rates them (a **value**); < 0 = drafted "
+        "*earlier* than the projection warrants (a **reach**). Add drafts to "
+        "data/adp_drafts/ and run build_adp.py to populate this."
     )
     st.divider()
 
-    all_avail = ds.get_available(sort_by="projected_pts")
-    rows_v = []
-    for i, p in enumerate(all_avail, 1):
-        norm = _norm_name(p["name"])
-        adp = p.get("adp_rank")
-        diff = (adp - i) if adp is not None else None
-        rows_v.append({
-            "Name":       p["name"],
-            "Pos":        POS_LABELS.get(p["position"]),
-            "Club":       p["team"],
-            "26/27 Proj": p["projected_pts"],
-            "Proj Rank":  i,
-            "Own Rank":   adp,
-            "Δ (Own−Proj)": diff,
-            "Own%":       p.get("ownership_pct"),
-            "DP Rec":     dp_lookup.get(norm),
+    if not ds.adp_players:
+        st.info("No ADP yet — share online drafts and I'll aggregate them into "
+                "data/adp.csv. Once there's data, this tab ranks value vs reach.")
+    else:
+        st.caption(f"ADP from **{ds.adp_drafts}** draft(s) · "
+                   f"**{ds.adp_players}** players with an ADP.")
+        # projection rank (over players that have an ADP, sorted by projection)
+        avail = ds.get_available(sort_by="projected_pts")
+        proj_rank = {p["_key"]: i for i, p in enumerate(avail, 1)}
+        rows_v = []
+        for p in avail:
+            if p.get("adp") is None:
+                continue
+            norm = _norm_name(p["name"])
+            pr = proj_rank[p["_key"]]
+            diff = round(p["adp"] - pr, 1)
+            rows_v.append({
+                "Name":       p["name"],
+                "Pos":        POS_LABELS.get(p["position"]),
+                "Club":       p["team"],
+                "26/27 Proj": p["projected_pts"],
+                "Proj Rank":  pr,
+                "ADP":        p["adp"],
+                "Δ (ADP−Proj)": diff,
+                "Range":      f"{p.get('adp_min')}–{p.get('adp_max')}",
+                "n":          p.get("adp_drafts"),
+                "DP Rec":     dp_lookup.get(norm),
+            })
+        df_v = pd.DataFrame(rows_v).sort_values("ADP")
+        if not df_v.empty:
+            df_v.index = range(1, len(df_v) + 1)
+        st.dataframe(df_v, width='stretch', height=680, column_config={
+            "Name": st.column_config.TextColumn("Name", pinned="left"),
+            "26/27 Proj": st.column_config.NumberColumn("26/27 Proj", format="%.1f"),
+            "ADP": st.column_config.NumberColumn("ADP", format="%.1f"),
+            "Δ (ADP−Proj)": st.column_config.NumberColumn(
+                "Δ (ADP−Proj)", help="Positive = drafted later than projected (value); negative = reach"),
         })
-    df_v = pd.DataFrame(rows_v)
-    if not df_v.empty:
-        df_v.index = range(1, len(df_v) + 1)
-    st.dataframe(df_v, width='stretch', height=680, column_config={
-        "Name": st.column_config.TextColumn("Name", pinned="left"),
-        "26/27 Proj": st.column_config.NumberColumn("26/27 Proj", format="%.1f"),
-        "Δ (Own−Proj)": st.column_config.NumberColumn(
-            "Δ (Own−Proj)", help="Positive = crowd rates higher than projection (reach); negative = value"),
-        "Own%": st.column_config.NumberColumn("Own%", format="%.1f"),
-    })

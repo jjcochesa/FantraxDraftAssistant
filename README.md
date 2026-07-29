@@ -21,7 +21,7 @@ projects 2026/27 fantasy points under Fantrax scoring and helps you draft.
   cookie is configured.
 - **My Team** — drafted squad, positional caps (G3/D8/M8/F6) and best available
   per position.
-- **ADP / Value** — projection rank vs the community ADP proxy.
+- **ADP / Value** — real ADP (from online drafts) vs projection rank: values vs reaches.
 - **Data-source debug** (expander under Rankings) — per-player detail-stat source
   (Sleeper / API-Football / missing), last-name-only Sleeper matches flagged as
   higher risk (shared surnames first), and the top players missing a Sleeper join
@@ -60,8 +60,10 @@ debug panel.
 | **Fantrax export** (`data/fantrax_players_2025.csv`) | **canonical pool: real 25/26 points, PPG, position, club** | the league's own player export — ground truth; re-export closer to the draft to refresh |
 | Sleeper `stats/clubsoccer:epl` | stat-detail columns (goals, tackles won, clean sheets, crosses, …) via name join | free, no key; same Opta feed Fantrax scores on |
 | API-Football (bundled JSON) | `starter_rate` for the projection's availability term; detail-stat fallback | harvested 2025/26 PL, 537 players |
-| FPL `bootstrap-static` | cost, ownership (ADP proxy), club name | never FPL points or FPL positions |
+| **ADP** (`data/adp.csv`) | **real average draft position** from online Fantrax drafts | built by `build_adp.py` from the draft files in `data/adp_drafts/` |
 | Fantrax `fxpa/req` | live draft board (best-effort) | needs a session cookie in `st.secrets["fantrax_cookie"]` |
+
+(No FPL — this is a Fantrax app, so ADP comes from real Fantrax drafts, not FPL ownership.)
 
 **Refreshing the pool:** re-export the player list from Fantrax and overwrite
 `data/fantrax_players_2025.csv` (columns `Player, Team, Position, RkOv, FPts,

@@ -14,15 +14,15 @@ Enrichment is joined by name onto that pool:
     tackles won, clean sheets, …) for the detail columns.
   • API-Football (bundled JSON) — ``starter_rate`` (starts/appearances) for the
     projection's availability term, and a detail-stat fallback.
-  • FPL ``bootstrap-static`` — cost and ownership% (an ADP proxy until Fantrax
-    community drafts start). Never FPL points or FPL positions.
+  • ADP (``data/adp.csv``) — real average draft position aggregated from online
+    Fantrax drafts (see build_adp.py). This is the ADP source; there is no FPL.
 
 The 26/27 projection is a Bayesian blend of each player's real FP/G with a
 position prior, scaled to 34 GWs × an availability rate.
 
 The Fantrax API (``fantrax.com/fxpa/req``) remains a best-effort, optional
 source for the live draft board (needs a session cookie). Everything degrades
-gracefully — the core runs fully offline from the two bundled data files.
+gracefully — the core runs fully offline from the bundled data files.
 """
 
 import csv
@@ -34,7 +34,6 @@ from typing import Optional
 
 import requests
 
-FPL_API      = "https://fantasy.premierleague.com/api"
 FANTRAX_REQ  = "https://www.fantrax.com/fxpa/req"
 
 # Fantrax roster positions, in board display order.
@@ -416,31 +415,34 @@ def load_fantrax_players(path: str = "data/fantrax_players_2025.csv") -> list[di
 
 
 # ---------------------------------------------------------------------------
-# FPL API — cost, ownership (ADP proxy), club. Never FPL points or positions.
+# ADP — real average draft position from online Fantrax drafts (build_adp.py).
 # ---------------------------------------------------------------------------
 
-def get_fpl_bootstrap() -> dict:
-    return _get(f"{FPL_API}/bootstrap-static/")
+def load_adp(path: str = "data/adp.csv") -> dict[str, dict]:
+    """Load aggregated ADP keyed by name (+ variants) for joining onto the pool.
 
-
-def build_fpl_lookup(bootstrap: dict) -> dict[str, dict]:
-    """Return a lookup of {cost, ownership_pct, team_name} keyed by full norm
-    name AND ``__last__<lastname>`` fallback, for joining onto the Fantrax pool
-    (whose names are full). Higher-minutes entry wins on key collision.
+    Expects columns: Name, ADP, Drafts, Min, Max (as written by build_adp.py).
+    Returns {} if the file is missing (no drafts collected yet).
     """
-    team_map = {t["id"]: t["name"] for t in bootstrap.get("teams", [])}
+    p = Path(path)
+    if not p.exists():
+        return {}
     lookup: dict[str, dict] = {}
     last_seen: dict[str, set] = {}
-    for p in bootstrap.get("elements", []):
-        full = f"{p.get('first_name','')} {p.get('second_name','')}".strip()
-        entry = {
-            "full_name":     full,
-            "cost":          round((p.get("now_cost") or 0) / 10, 1),
-            "ownership_pct": _num(p.get("selected_by_percent")),
-            "team_name":     team_map.get(p.get("team"), ""),
-            "minutes":       _num(p.get("minutes")),
-        }
-        _index_entry(lookup, last_seen, full, entry)
+    with p.open(encoding="utf-8-sig", newline="") as fh:
+        for row in csv.DictReader(fh):
+            name = (row.get("Name") or "").strip()
+            if not name:
+                continue
+            entry = {
+                "adp":      round(_num(row.get("ADP")), 1),
+                "n_drafts": int(_num(row.get("Drafts"))),
+                "min_pick": int(_num(row.get("Min"))) or None,
+                "max_pick": int(_num(row.get("Max"))) or None,
+                # busiest-wins tiebreak reuses the "minutes" slot in _index_entry
+                "minutes":  int(_num(row.get("Drafts"))),
+            }
+            _index_entry(lookup, last_seen, name, entry)
     _flag_ambiguous(lookup, last_seen)
     return lookup
 
@@ -561,20 +563,21 @@ def _detail_source(sl: Optional[dict], apif_rec: Optional[dict]) -> tuple[dict, 
 
 def build_player_stats(
     fantrax_players: list[dict],
-    fpl_lookup:      Optional[dict] = None,
+    adp_lookup:      Optional[dict] = None,
     sleeper_lookup:  Optional[dict] = None,
     apif_lookup:     Optional[dict] = None,
 ) -> dict[str, dict]:
     """Build enriched records from the canonical Fantrax pool.
 
     25/26 points, PPG, games and position come straight from Fantrax. Sleeper /
-    API-Football supply the stat-detail columns and ``starter_rate``; FPL supplies
-    cost and ownership (ADP proxy). The 26/27 projection is a Bayesian blend of
-    the player's real Fantrax PPG with a position prior × 34 GWs × availability.
+    API-Football supply the stat-detail columns and ``starter_rate``; ADP comes
+    from real online drafts (data/adp.csv). The 26/27 projection is a Bayesian
+    blend of the player's real Fantrax PPG with a position prior × 34 GWs ×
+    availability.
 
     Returns {player_key: record}. player_key is the Fantrax id (or norm name).
     """
-    fpl_lookup     = fpl_lookup or {}
+    adp_lookup     = adp_lookup or {}
     sleeper_lookup = sleeper_lookup or {}
     apif_lookup    = apif_lookup or {}
 
@@ -585,12 +588,17 @@ def build_player_stats(
     for fx in fantrax_players:
         sl, s_match = match_entry(fx["name"], sleeper_lookup)
         ap, _       = match_entry(fx["name"], apif_lookup)
-        fpl, _      = match_entry(fx["name"], fpl_lookup)
+        # ADP names are already canonical pool names (build_adp.py), so require a
+        # full / first+last match — a surname-only fallback here could misassign
+        # one pool player's ADP to another with the same surname.
+        adp, adp_mt = match_entry(fx["name"], adp_lookup)
+        if adp_mt == "lastname":
+            adp = None
 
         values, source = _detail_source(sl, ap)
         starter_rate = (_num(ap.get("starter_rate")) if ap else 1.0) or 1.0
 
-        interim.append({"fx": fx, "sl": sl, "ap": ap, "fpl": fpl,
+        interim.append({"fx": fx, "sl": sl, "ap": ap, "adp": adp,
                         "match_type": s_match,
                         # ambiguous surnames are now refused, so no risky joins remain
                         "ambiguous_last": False,
@@ -633,7 +641,7 @@ def build_player_stats(
     # ------------------------------------------------------------------
     result: dict[str, dict] = {}
     for it in interim:
-        fx, fpl, sl = it["fx"], it["fpl"], it["sl"]
+        fx, adp, sl = it["fx"], it["adp"], it["sl"]
         pos, games, ppg = fx["position"], fx["games"], fx["ppg"]
         starter_rate = it["starter_rate"]
 
@@ -665,7 +673,7 @@ def build_player_stats(
         result[key] = {
             "name":            fx["name"],
             "web_name":        fx["name"].split()[-1],
-            "team":            (fpl["team_name"] if fpl and fpl.get("team_name") else fx["team"]),
+            "team":            fx["team"],
             "position":        pos,
             "total_pts":       fx["total_pts"],
             "ppg":             ppg,
@@ -691,10 +699,11 @@ def build_player_stats(
             "saves":           vals["saves"],
             "yellow_cards":    vals["yellow_card"],
             "red_cards":       vals["red_card"],
-            # FPL-sourced (cost + community consensus only)
-            "cost":            fpl["cost"]          if fpl else None,
-            "ownership_pct":   fpl["ownership_pct"] if fpl else None,
-            "has_fpl":         fpl is not None,
+            # ADP from real online drafts (data/adp.csv); None until collected
+            "adp":             adp["adp"]      if adp else None,
+            "adp_drafts":      adp["n_drafts"] if adp else 0,
+            "adp_min":         adp["min_pick"] if adp else None,
+            "adp_max":         adp["max_pick"] if adp else None,
             "has_sleeper":     it["sl"] is not None,
             "has_apif":        it["ap"] is not None,
             "match_type":      it["match_type"],
@@ -702,11 +711,10 @@ def build_player_stats(
             "_detail_source":  it["source"],
         }
 
-    # ADP proxy rank: community consensus via FPL ownership %.
+    # ADP rank: ordinal position by average draft pick (earliest picked = 1).
     ranked = sorted(
-        ((k, d) for k, d in result.items() if d["ownership_pct"] is not None),
-        key=lambda x: x[1]["ownership_pct"],
-        reverse=True,
+        ((k, d) for k, d in result.items() if d["adp"] is not None),
+        key=lambda x: x[1]["adp"],
     )
     for rank, (key, _) in enumerate(ranked, 1):
         result[key]["adp_rank"] = rank
@@ -792,25 +800,18 @@ class FantraxAPI:
 
 def fetch_sources(fantrax_path: str = "data/fantrax_players_2025.csv",
                   stats_path: str = "data/pl_stats_2025.json",
+                  adp_path: str = "data/adp.csv",
                   sleeper_year: int = 2025) -> dict:
-    """Load all inputs: the bundled Fantrax pool (canonical) + bundled
-    API-Football stats, plus live FPL and Sleeper enrichment.
+    """Load all inputs: the bundled Fantrax pool (canonical) + API-Football stats
+    + ADP (from online drafts), plus live Sleeper enrichment.
 
-    Kept separate from record-building so the network fetch caches once. FPL and
-    Sleeper failures degrade gracefully — the core (points, PPG, position,
-    projections) runs entirely off the two bundled files.
+    Kept separate from record-building so the network fetch caches once. Sleeper
+    failure degrades gracefully — the core (points, PPG, position, projections,
+    ADP) runs entirely off the bundled files.
     """
     fantrax_players = load_fantrax_players(fantrax_path)
     apif_lookup = build_apif_lookup(load_pl_stats(stats_path))
-
-    fpl_lookup: Optional[dict] = None
-    fpl_loaded = False
-    fpl_error: Optional[str] = None
-    try:
-        fpl_lookup = build_fpl_lookup(get_fpl_bootstrap())
-        fpl_loaded = True
-    except Exception as exc:  # noqa: BLE001 - surfaced in the UI status line
-        fpl_error = str(exc)
+    adp_lookup  = load_adp(adp_path)
 
     sleeper_lookup: Optional[dict] = None
     sleeper_loaded = False
@@ -826,12 +827,10 @@ def fetch_sources(fantrax_path: str = "data/fantrax_players_2025.csv",
     return {
         "fantrax_players": fantrax_players,
         "apif_lookup":     apif_lookup,
-        "fpl_lookup":      fpl_lookup,
+        "adp_lookup":      adp_lookup,
         "sleeper_lookup":  sleeper_lookup,
         "fantrax_loaded":  bool(fantrax_players),
         "apif_loaded":     bool(apif_lookup),
-        "fpl_loaded":      fpl_loaded,
-        "fpl_error":       fpl_error,
         "sleeper_loaded":  sleeper_loaded,
         "sleeper_error":   sleeper_error,
     }
@@ -840,7 +839,7 @@ def fetch_sources(fantrax_path: str = "data/fantrax_players_2025.csv",
 def build_from_sources(sources: dict) -> dict:
     """Build the enriched player DB from loaded sources."""
     player_data = build_player_stats(
-        sources["fantrax_players"], sources.get("fpl_lookup"),
+        sources["fantrax_players"], sources.get("adp_lookup"),
         sources.get("sleeper_lookup"), sources.get("apif_lookup"),
     )
     # Validate the stat feed reproduces Fantrax's own points (Sleeper preferred).
@@ -848,17 +847,19 @@ def build_from_sources(sources: dict) -> dict:
     if sources.get("sleeper_lookup"):
         validation = validate_scoring(
             sources["fantrax_players"], sources["sleeper_lookup"], "Sleeper")
+    adp_players = sum(1 for d in player_data.values() if d.get("adp") is not None)
+    total_drafts = max((d.get("adp_drafts", 0) for d in player_data.values()), default=0)
     return {
         "player_data":     player_data,
         "validation":      validation,
         "fantrax_loaded":  sources["fantrax_loaded"],
         "apif_loaded":     sources.get("apif_loaded", False),
-        "fpl_loaded":      sources["fpl_loaded"],
-        "fpl_error":       sources["fpl_error"],
         "sleeper_loaded":  sources.get("sleeper_loaded", False),
         "sleeper_error":   sources.get("sleeper_error"),
         "sleeper_matched": sum(1 for d in player_data.values() if d.get("has_sleeper")),
         "apif_matched":    sum(1 for d in player_data.values() if d.get("has_apif")),
+        "adp_players":     adp_players,
+        "adp_drafts":      total_drafts,
         "num_players":     len(player_data),
     }
 
@@ -892,12 +893,12 @@ class DraftState:
         self.player_data: dict[str, dict] = {}
         self.fantrax_loaded = False
         self.apif_loaded    = False
-        self.fpl_loaded     = False
-        self.fpl_error: Optional[str] = None
         self.sleeper_loaded = False
         self.sleeper_error: Optional[str] = None
         self.sleeper_matched = 0
         self.apif_matched    = 0
+        self.adp_players     = 0
+        self.adp_drafts      = 0
         self.validation: Optional[dict] = None
 
         # overall_pick_number → {"key": player_key, "slot": int}
@@ -908,12 +909,12 @@ class DraftState:
         self.player_data     = db.get("player_data", {})
         self.fantrax_loaded  = db.get("fantrax_loaded", False)
         self.apif_loaded     = db.get("apif_loaded", False)
-        self.fpl_loaded      = db.get("fpl_loaded", False)
-        self.fpl_error       = db.get("fpl_error")
         self.sleeper_loaded  = db.get("sleeper_loaded", False)
         self.sleeper_error   = db.get("sleeper_error")
         self.sleeper_matched = db.get("sleeper_matched", 0)
         self.apif_matched    = db.get("apif_matched", 0)
+        self.adp_players     = db.get("adp_players", 0)
+        self.adp_drafts      = db.get("adp_drafts", 0)
         self.validation      = db.get("validation")
 
     # -- board geometry -------------------------------------------------
