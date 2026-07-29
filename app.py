@@ -58,14 +58,10 @@ def _get_draft_state(league_id: str, num_teams: int, num_rounds: int) -> DraftSt
     return DraftState(league_id, num_teams=num_teams, num_rounds=num_rounds)
 
 
-def _auto_dp_score(p: dict) -> float:
-    """Primary signal is projected_pts. Players with no projection fall to the
-    bottom, ordered by last season's Fantrax rank."""
-    proj = p.get("projected_pts") or 0.0
-    if proj > 0:
-        return proj
-    rk = p.get("rank_ov")
-    return -(rk if rk else 9999) - 1000.0
+def _auto_dp_key(p: dict) -> tuple:
+    """Auto-rank order = the consensus draft board (ascending; unranked last)."""
+    br = p.get("board_rank")
+    return (br is None, br or 0.0)
 
 
 # Build the DB up front so DP-text mutations happen BEFORE the text_area widget
@@ -74,7 +70,7 @@ def _auto_dp_score(p: dict) -> float:
 player_db = _load_player_db()
 
 if st.session_state.pop("_trigger_auto_dp", False):
-    ranked = sorted(player_db["player_data"].values(), key=_auto_dp_score, reverse=True)
+    ranked = sorted(player_db["player_data"].values(), key=_auto_dp_key)
     st.session_state["dp_rankings_text"] = "\n".join(
         p["name"] for p in ranked[:150] if p.get("name")
     )
@@ -160,8 +156,14 @@ with status_slot.container():
     con_icon = f"✅ {ds.consensus_players}" if ds.consensus_players else "—"
     dp_icon  = f"✅ {len(dp_lookup)}" if dp_lookup else "—"
     st.caption(
-        f"Fantrax {fx_icon} {player_db.get('num_players', 0)}  ·  "
-        f"Sleeper {slp_icon}  ·  ADP {adp_icon}  ·  Consensus {con_icon}  ·  DP {dp_icon}"
+        f"**Board {ds.board_players}** ranked  ·  ADP {adp_icon}  ·  "
+        f"Consensus {con_icon}  ·  Mine {ds.override_players or '—'}  ·  DP {dp_icon}"
+    )
+    st.caption(
+        f"Pool {fx_icon} {player_db.get('num_players', 0)}"
+        + (f" (+{ds.off_pool_players} drafted but outside the Fantrax export)"
+           if ds.off_pool_players else "")
+        + f"  ·  Sleeper {slp_icon}"
     )
     if not ds.fantrax_loaded:
         st.error("Fantrax pool (data/fantrax_players_2025.csv) not found — "
@@ -211,15 +213,17 @@ def _rankings_df(players: list[dict], detail: bool) -> pd.DataFrame:
     for p in players:
         norm = _norm_name(p["name"])
         row = {
+            "Board":      p.get("board_rank"),
             "Name":       p["name"],
             "Pos":        POS_LABELS.get(p["position"], p["position"]),
             "Club":       p["team"],
-            "25/26 Pts":  p["total_pts"],
-            "PPG":        p["ppg"],
-            "GW":         p["games"],
-            "26/27 Proj": p["projected_pts"],
             "ADP":        p.get("adp"),
+            "n":          p.get("adp_drafts") or None,
             "Cons":       p.get("consensus"),
+            "Mine":       p.get("my_rank"),
+            "25/26 Pts":  p["total_pts"] or None,
+            "PPG":        p["ppg"] or None,
+            "GW":         p["games"] or None,
             "DP Rec":     dp_lookup.get(norm),
         }
         if detail:
@@ -237,9 +241,11 @@ def _rankings_column_config(detail: bool) -> dict:
         "Name":       st.column_config.TextColumn("Name", pinned="left", width="medium"),
         "25/26 Pts":  st.column_config.NumberColumn("25/26 Pts", format="%.1f"),
         "PPG":        st.column_config.NumberColumn("PPG", format="%.2f"),
-        "26/27 Proj": st.column_config.NumberColumn("26/27 Proj", format="%.1f"),
+        "Board":      st.column_config.NumberColumn("Board", format="%.1f", help="Your draft board rank: your override if set, else ADP blended with expert consensus"),
         "ADP":        st.column_config.NumberColumn("ADP", format="%.1f", help="Average draft position from real online drafts"),
+        "n":          st.column_config.NumberColumn("n", help="How many drafts this player appeared in"),
         "Cons":       st.column_config.NumberColumn("Cons", format="%.1f", help="Expert consensus rank (panel of specialists)"),
+        "Mine":       st.column_config.NumberColumn("Mine", format="%.1f", help="Your manual override (data/my_overrides.csv)"),
         "DP Rec":     st.column_config.NumberColumn("DP Rec", help="Your recommended draft order (sidebar)"),
     }
     return cfg
@@ -313,8 +319,7 @@ def _render_data_source_debug(ds: DraftState) -> None:
                      }.get(p.get("match_type"), "—")
             if p.get("ambiguous_last"):
                 badge += "  ·  ⚠️ shared surname"
-            pm = {"per-stat": "per-stat (Sleeper rates)", "ppg": "PPG fallback",
-                  "none": "—"}.get(p.get("proj_method"), "—")
+
             st.markdown(
                 f"**{p['name']}** — {POS_LABELS.get(p['position'])} · {p['team']} · "
                 f"{p['total_pts']} pts (Fantrax)  |  Sleeper: {badge}  ·  "
@@ -324,9 +329,18 @@ def _render_data_source_debug(ds: DraftState) -> None:
                 + (f" (n={p['n_experts']}, best {p['expert_best']} / worst {p['expert_worst']})"
                    if p.get('n_experts') else "")
             )
+            src_bits = []
+            if p.get("my_rank") is not None:
+                src_bits.append(f"your override **{p['my_rank']}**")
+            if p.get("adp") is not None:
+                src_bits.append(f"ADP {p['adp']} over {p.get('adp_drafts')} draft(s)")
+            if p.get("consensus") is not None:
+                src_bits.append(f"consensus {p['consensus']}")
             st.caption(
-                f"26/27 projection: **{p.get('projected_pts')}** via *{pm}*  ·  "
-                f"top-down PPG model would give {p.get('proj_ppg')}."
+                f"Board rank **{p.get('board_rank') if p.get('board_rank') is not None else '—'}**"
+                + (" — from " + ", ".join(src_bits) if src_bits else " — no draft data yet")
+                + (f"  ·  _{p['my_note']}_" if p.get("my_note") else "")
+                + ("" if p.get("in_pool", True) else "  ·  ⚠️ not in the Fantrax export snapshot")
             )
             src = p.get("_detail_source", {})
             rows = [{"Stat": STAT_LABELS.get(s, s),
@@ -379,14 +393,14 @@ with tab_ranks:
         pos_filter = st.radio("Position", ["All"] + [POS_LABELS[p] for p in POSITION_ORDER],
                               horizontal=True, key="ranks_pos")
     with rc2:
-        sort_mode = st.radio("Sort by", ["26/27 Projected", "25/26 Total", "PPG"],
+        sort_mode = st.radio("Sort by", ["Draft board", "25/26 Total", "PPG"],
                              horizontal=True, key="ranks_sort")
     with rc3:
         top_n = st.selectbox("Show", [25, 50, 100, 200], index=1, key="ranks_n")
     with rc4:
         show_detail = st.toggle("Detail cols", value=False, key="ranks_detail")
 
-    sort_field = {"26/27 Projected": "projected_pts", "25/26 Total": "total_pts",
+    sort_field = {"Draft board": "board_rank", "25/26 Total": "total_pts",
                   "PPG": "ppg"}[sort_mode]
     inv_pos = {v: k for k, v in POS_LABELS.items()}
     pos_arg = None if pos_filter == "All" else inv_pos[pos_filter]
@@ -397,8 +411,12 @@ with tab_ranks:
     if dp_lookup:
         available.sort(key=lambda p: (dp_lookup.get(_norm_name(p["name"]), 10**9),))
         ranked_part = [p for p in available if _norm_name(p["name"]) in dp_lookup]
-        rest = sorted([p for p in available if _norm_name(p["name"]) not in dp_lookup],
-                      key=lambda p: p.get(sort_field) or 0, reverse=True)
+        if sort_field == "board_rank":
+            rest = sorted([p for p in available if _norm_name(p["name"]) not in dp_lookup],
+                          key=lambda p: (p.get("board_rank") is None, p.get("board_rank") or 0))
+        else:
+            rest = sorted([p for p in available if _norm_name(p["name"]) not in dp_lookup],
+                          key=lambda p: p.get(sort_field) or 0, reverse=True)
         available = ranked_part + rest
 
     available = available[:top_n]
@@ -412,14 +430,12 @@ with tab_ranks:
                      height=min(36 * len(df) + 40, 720))
 
     st.caption(
-        "**25/26 Pts / PPG / Pos** are Fantrax's own final totals (from the league "
-        "export). **26/27 Proj** = per-stat model: each Opta per-90 rate is "
-        "regressed toward its position mean (volatile stats like goals shrink "
-        "harder than stable ones like tackles), scaled to 34 GWs × a starter-rate "
-        "availability term, and scored with Fantrax rules. Players without Sleeper "
-        "stats fall back to a PPG-based projection. Detail stats: Sleeper (Opta), "
-        "API-Football fallback. **ADP** = average draft position from real online "
-        "drafts. **Cons** = expert consensus rank from a panel of specialists."
+        "**Board** is your draft list rank — your own override if you've set one, "
+        "otherwise real-draft **ADP** blended with the **Cons**ensus panel (ADP "
+        "weighted by how many drafts the player appeared in, so a player seen in "
+        "5 boards outweighs the panel). **n** = drafts seen. **Mine** = your "
+        "override. 25/26 Pts / PPG are Fantrax's actual last-season numbers, shown "
+        "as context only — they do not drive the order."
     )
 
     _render_data_source_debug(ds)
@@ -460,7 +476,7 @@ with tab_draft:
     # Manual pick entry
     mc1, mc2, mc3 = st.columns([3, 1, 1])
     with mc1:
-        avail_for_pick = ds.get_available(sort_by="projected_pts")
+        avail_for_pick = ds.get_available(sort_by="board_rank")
         pick_options = {f"{p['name']} ({POS_LABELS.get(p['position'])}, {p['team']})": p["_key"]
                         for p in avail_for_pick[:400]}
         slot_now = ds.slot_on_the_clock(ds.current_pick)
@@ -512,12 +528,12 @@ with tab_draft:
         pos_f = st.radio("Pos", ["All"] + [POS_LABELS[p] for p in POSITION_ORDER],
                          horizontal=True, key="draft_pos_filter")
         pos_a = None if pos_f == "All" else inv_pos[pos_f]
-        avail = ds.get_available(pos_a, sort_by="projected_pts")[:40]
+        avail = ds.get_available(pos_a, sort_by="board_rank")[:40]
         rows_a = [{
+            "Board":  p.get("board_rank"),
             "Player": p["web_name"],
             "Pos":    POS_LABELS.get(p["position"]),
             "Club":   p["team"],
-            "Proj":   p["projected_pts"],
             "DP":     dp_lookup.get(_norm_name(p["name"])),
         } for p in avail]
         df_a = pd.DataFrame(rows_a)
@@ -526,7 +542,7 @@ with tab_draft:
         st.dataframe(df_a, width='stretch',
                      column_config={
                          "Player": st.column_config.TextColumn("Player", pinned="left"),
-                         "Proj": st.column_config.NumberColumn("Proj", format="%.1f"),
+                         "Board": st.column_config.NumberColumn("Board", format="%.1f"),
                      },
                      height=min(36 * ds.num_rounds + 40, 620))
 
@@ -555,17 +571,19 @@ with tab_mine:
             "Club":       p["team"],
             "25/26 Pts":  p["total_pts"],
             "PPG":        p["ppg"],
-            "26/27 Proj": p["projected_pts"],
+            "Board":      p.get("board_rank"),
         } for p in my_picks]
-        df_m = pd.DataFrame(rows_m).sort_values(["Pos", "26/27 Proj"], ascending=[True, False])
+        df_m = pd.DataFrame(rows_m).sort_values(["Pos", "Board"], ascending=[True, True])
         df_m.index = range(1, len(df_m) + 1)
         st.dataframe(df_m, width='stretch', column_config={
             "Name": st.column_config.TextColumn("Name", pinned="left"),
             "25/26 Pts": st.column_config.NumberColumn("25/26 Pts", format="%.1f"),
             "PPG": st.column_config.NumberColumn("PPG", format="%.2f"),
-            "26/27 Proj": st.column_config.NumberColumn("26/27 Proj", format="%.1f"),
+            "Board": st.column_config.NumberColumn("Board", format="%.1f"),
         })
-        st.caption(f"Squad total 26/27 projection: **{sum(p['projected_pts'] for p in my_picks):.0f}** pts")
+        _bd = [p["board_rank"] for p in my_picks if p.get("board_rank") is not None]
+        if _bd:
+            st.caption(f"Average board rank of your picks: **{sum(_bd)/len(_bd):.1f}**")
 
     # Positional needs → best available per position
     remaining = ds.num_rounds - len(my_picks)
@@ -576,21 +594,23 @@ with tab_mine:
         for col, pos in zip(exp_cols, POSITION_ORDER):
             room = POS_CAPS[pos] - counts.get(pos, 0)
             col.markdown(f"**{POS_LABELS[pos]}**  ·  {room} slot{'s' if room != 1 else ''} left")
-            for p in ds.get_available(pos, sort_by="projected_pts")[:5]:
+            for p in ds.get_available(pos, sort_by="board_rank")[:5]:
                 norm = _norm_name(p["name"])
                 dp_tag = f" · DP#{dp_lookup[norm]}" if norm in dp_lookup else ""
-                col.markdown(f"- {p['web_name']} *({p['projected_pts']:.0f}{dp_tag})*")
+                _br = p.get("board_rank")
+                col.markdown(f"- {p['web_name']} *(board {_br:.0f}{dp_tag})*"
+                             if _br is not None else f"- {p['web_name']} *(unranked{dp_tag})*")
 
 
 # ── ADP / Value ─────────────────────────────────────────────────────────────
 with tab_adp:
     st.subheader("ADP / Value")
     st.caption(
-        "Real **ADP** (average draft position) aggregated from online drafts vs "
-        "your projection rank. **ADP − Proj Rank** > 0 = the field drafts them "
-        "*later* than your projection rates them (a **value**); < 0 = drafted "
-        "*earlier* than the projection warrants (a **reach**). Add drafts to "
-        "data/adp_drafts/ and run build_adp.py to populate this."
+        "Where the **expert panel** and the **actual drafts** disagree. "
+        "**Cons − ADP** > 0 = the panel ranks them worse than drafters actually "
+        "take them (the room reaches); < 0 = the panel likes them more than the "
+        "room does (they fall). Add drafts to data/adp_drafts/ and run "
+        "build_adp.py to refresh."
     )
     st.divider()
 
@@ -598,49 +618,37 @@ with tab_adp:
         st.info("No ADP yet — share online drafts and I'll aggregate them into "
                 "data/adp.csv. Once there's data, this tab ranks value vs reach.")
     else:
-        # Rank only players who HAVE a projection — players with no 25/26 sample
-        # (new signings, promoted clubs) project 0, so a Δ against them is
-        # meaningless and would swamp the table. They're listed with a blank Δ.
-        avail = ds.get_available(sort_by="projected_pts")
-        projected = [p for p in avail if (p.get("projected_pts") or 0) > 0]
-        proj_rank = {p["_key"]: i for i, p in enumerate(projected, 1)}
-        no_proj = sum(1 for p in avail
-                      if p.get("adp") is not None and (p.get("projected_pts") or 0) <= 0)
-        st.caption(
-            f"ADP from **{ds.adp_drafts}** draft(s) · **{ds.adp_players}** players "
-            f"with an ADP · Δ is computed over the **{len(proj_rank)}** players that "
-            f"have a projection"
-            + (f" ({no_proj} drafted players have no 25/26 sample — blank Δ)" if no_proj else "")
-            + "."
-        )
+        avail = ds.get_available(sort_by="board_rank")
         rows_v = []
         for p in avail:
-            if p.get("adp") is None:
+            if p.get("adp") is None and p.get("consensus") is None:
                 continue
             norm = _norm_name(p["name"])
-            pr = proj_rank.get(p["_key"])
-            diff = round(p["adp"] - pr, 1) if pr is not None else None
+            adp, cons = p.get("adp"), p.get("consensus")
+            gap = round(cons - adp, 1) if (adp is not None and cons is not None) else None
             rows_v.append({
+                "Board":      p.get("board_rank"),
                 "Name":       p["name"],
                 "Pos":        POS_LABELS.get(p["position"]),
                 "Club":       p["team"],
-                "26/27 Proj": p["projected_pts"],
-                "Proj Rank":  pr,
-                "ADP":        p["adp"],
-                "Δ (ADP−Proj)": diff,
-                "Cons":       p.get("consensus"),
-                "Range":      f"{p.get('adp_min')}–{p.get('adp_max')}",
-                "n":          p.get("adp_drafts"),
+                "ADP":        adp,
+                "Cons":       cons,
+                "Δ (Cons−ADP)": gap,
+                "Range":      (f"{p.get('adp_min')}–{p.get('adp_max')}"
+                               if p.get("adp_min") else None),
+                "n":          p.get("adp_drafts") or None,
+                "Mine":       p.get("my_rank"),
                 "DP Rec":     dp_lookup.get(norm),
             })
-        df_v = pd.DataFrame(rows_v).sort_values("ADP")
+        df_v = pd.DataFrame(rows_v).sort_values("Board")
         if not df_v.empty:
             df_v.index = range(1, len(df_v) + 1)
         st.dataframe(df_v, width='stretch', height=680, column_config={
             "Name": st.column_config.TextColumn("Name", pinned="left"),
-            "26/27 Proj": st.column_config.NumberColumn("26/27 Proj", format="%.1f"),
+            "Board": st.column_config.NumberColumn("Board", format="%.1f"),
             "ADP": st.column_config.NumberColumn("ADP", format="%.1f"),
             "Cons": st.column_config.NumberColumn("Cons", format="%.1f", help="Expert consensus rank"),
-            "Δ (ADP−Proj)": st.column_config.NumberColumn(
-                "Δ (ADP−Proj)", help="Positive = drafted later than projected (value); negative = reach"),
+            "Mine": st.column_config.NumberColumn("Mine", format="%.1f"),
+            "Δ (Cons−ADP)": st.column_config.NumberColumn(
+                "Δ (Cons−ADP)", help="Positive = room drafts earlier than the panel rates them; negative = they fall past the panel's rank"),
         })

@@ -435,6 +435,7 @@ def load_adp(path: str = "data/adp.csv") -> dict[str, dict]:
             if not name:
                 continue
             entry = {
+                "display_name": name,
                 "adp":      round(_num(row.get("ADP")), 1),
                 "n_drafts": int(_num(row.get("Drafts"))),
                 "min_pick": int(_num(row.get("Min"))) or None,
@@ -482,6 +483,9 @@ def load_consensus(path: str = "data/consensus_ranks.csv") -> dict[str, dict]:
             ranks = [_num(row.get(c)) for c in expert_cols]
             ranked = [r for r in ranks if 0 < r < _CONSENSUS_UNRANKED]
             entry = {
+                "display_name":   name,
+                "team_code":      (row.get("Team") or "").strip().upper(),
+                "position":       (row.get("Pos") or "").strip().upper(),
                 "consensus":      round(_num(row.get("Agg.")), 1) or None,
                 "consensus_rank": int(_num(rank_s)) or None,
                 "n_experts":      len(ranked),
@@ -550,6 +554,61 @@ def build_sleeper_lookup(players: dict, season_stats: dict) -> dict[str, dict]:
 
 
 # ---------------------------------------------------------------------------
+# My overrides — hand-placed players. Beats every automated signal.
+# ---------------------------------------------------------------------------
+
+def load_overrides(path: str = "data/my_overrides.csv") -> dict[str, dict]:
+    """Load manual draft-position overrides.
+
+    Columns: ``Name``, ``Rank`` (where you want them on your board — a pick
+    number), optional ``Note``. A blank Rank means "keep the consensus rank but
+    show the note". Returns {} when the file is absent.
+    """
+    p = Path(path)
+    if not p.exists():
+        return {}
+    lookup: dict[str, dict] = {}
+    last_seen: dict[str, set] = {}
+    with p.open(encoding="utf-8-sig", newline="") as fh:
+        for row in csv.DictReader(fh):
+            name = (row.get("Name") or "").strip()
+            if not name:
+                continue
+            rank = _num(row.get("Rank"))
+            _index_entry(lookup, last_seen, name, {
+                "my_rank": rank or None,
+                "note":    (row.get("Note") or "").strip(),
+                "minutes": 1,
+            })
+    _flag_ambiguous(lookup, last_seen)
+    return lookup
+
+
+# How much weight the expert-consensus board carries against the real drafts,
+# expressed in "equivalent number of drafts". Real draft boards are the primary
+# signal, so the panel counts for a couple of drafts' worth.
+CONSENSUS_WEIGHT = 2.0
+
+
+def _blend_rank(adp: Optional[float], n_drafts: int,
+                consensus: Optional[float]) -> Optional[float]:
+    """Combine real-draft ADP with the expert consensus into one board rank.
+
+    ADP is weighted by how many drafts a player actually appeared in, so a player
+    seen in 5 drafts outweighs the panel, while a player seen once is pulled
+    toward it. Either source alone is used as-is.
+    """
+    if adp is not None and consensus is not None:
+        w = float(max(n_drafts, 1))
+        return round((w * adp + CONSENSUS_WEIGHT * consensus) / (w + CONSENSUS_WEIGHT), 1)
+    if adp is not None:
+        return round(adp, 1)
+    if consensus is not None:
+        return round(consensus, 1)
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Player database builder — Fantrax pool is canonical; the rest is enrichment.
 # ---------------------------------------------------------------------------
 
@@ -615,6 +674,7 @@ def build_player_stats(
     sleeper_lookup:  Optional[dict] = None,
     apif_lookup:     Optional[dict] = None,
     consensus_lookup: Optional[dict] = None,
+    overrides:        Optional[dict] = None,
 ) -> dict[str, dict]:
     """Build enriched records from the canonical Fantrax pool.
 
@@ -630,6 +690,33 @@ def build_player_stats(
     sleeper_lookup   = sleeper_lookup or {}
     apif_lookup      = apif_lookup or {}
     consensus_lookup = consensus_lookup or {}
+    overrides        = overrides or {}
+
+    # Union the pool with everyone who appears in a draft or on the consensus
+    # board. A player being drafted must never fall off the list just because the
+    # Fantrax export snapshot omits them (e.g. Luka Vuskovic).
+    pool_keys: set[str] = set()
+    for fx in fantrax_players:
+        pool_keys.update(_name_variants(fx["name"]))
+    extra: list[dict] = []
+    seen_extra: set[str] = set()
+    for src in (adp_lookup, consensus_lookup):
+        for key, entry in src.items():
+            if key.startswith("__last__") or key in pool_keys or key in seen_extra:
+                continue
+            disp = entry.get("display_name") or key.title()
+            cons_e, _ = match_entry(disp, consensus_lookup)
+            code = (cons_e or {}).get("team_code", "")
+            pos  = (cons_e or {}).get("position", "") or "M"
+            seen_extra.add(key)
+            extra.append({
+                "fantrax_id": "", "name": disp, "team_code": code,
+                "team": _EPL_TEAM.get(code, code or "—"),
+                "position": pos if pos in POSITION_ORDER else "M",
+                "total_pts": 0.0, "ppg": 0.0, "games": 0, "rank_ov": None,
+                "in_pool": False,
+            })
+    fantrax_players = [dict(fx, in_pool=True) for fx in fantrax_players] + extra
 
     # ------------------------------------------------------------------
     # Pass 1 — join enrichment, carry real Fantrax points/PPG/games/position.
@@ -647,11 +734,14 @@ def build_player_stats(
         cons, cons_mt = match_entry(fx["name"], consensus_lookup)
         if cons_mt == "lastname":
             cons = None
+        ovr, ovr_mt = match_entry(fx["name"], overrides)
+        if ovr_mt == "lastname":
+            ovr = None
 
         values, source = _detail_source(sl, ap)
         starter_rate = (_num(ap.get("starter_rate")) if ap else 1.0) or 1.0
 
-        interim.append({"fx": fx, "sl": sl, "ap": ap, "adp": adp, "cons": cons,
+        interim.append({"fx": fx, "sl": sl, "ap": ap, "adp": adp, "cons": cons, "ovr": ovr,
                         "match_type": s_match,
                         # ambiguous surnames are now refused, so no risky joins remain
                         "ambiguous_last": False,
@@ -694,7 +784,7 @@ def build_player_stats(
     # ------------------------------------------------------------------
     result: dict[str, dict] = {}
     for it in interim:
-        fx, adp, sl, cons = it["fx"], it["adp"], it["sl"], it["cons"]
+        fx, adp, sl, cons, ovr = it["fx"], it["adp"], it["sl"], it["cons"], it["ovr"]
         pos, games, ppg = fx["position"], fx["games"], fx["ppg"]
         starter_rate = it["starter_rate"]
 
@@ -758,11 +848,19 @@ def build_player_stats(
             "adp_min":         adp["min_pick"] if adp else None,
             "adp_max":         adp["max_pick"] if adp else None,
             # Expert consensus board (data/consensus_ranks.csv)
+            "in_pool":         fx.get("in_pool", True),
+            "my_rank":         (ovr or {}).get("my_rank"),
+            "my_note":         (ovr or {}).get("note") or None,
             "consensus":       cons["consensus"]      if cons else None,
             "consensus_rank":  cons["consensus_rank"] if cons else None,
             "n_experts":       cons["n_experts"]      if cons else 0,
             "expert_best":     cons["expert_best"]    if cons else None,
             "expert_worst":    cons["expert_worst"]   if cons else None,
+            # Consensus board rank — what the draft list is ordered by.
+            "board_rank":      ((ovr or {}).get("my_rank")
+                                or _blend_rank(adp["adp"] if adp else None,
+                                               adp["n_drafts"] if adp else 0,
+                                               cons["consensus"] if cons else None)),
             "has_sleeper":     it["sl"] is not None,
             "has_apif":        it["ap"] is not None,
             "match_type":      it["match_type"],
@@ -861,6 +959,7 @@ def fetch_sources(fantrax_path: str = "data/fantrax_players_2025.csv",
                   stats_path: str = "data/pl_stats_2025.json",
                   adp_path: str = "data/adp.csv",
                   consensus_path: str = "data/consensus_ranks.csv",
+                  overrides_path: str = "data/my_overrides.csv",
                   sleeper_year: int = 2025) -> dict:
     """Load all inputs: the bundled Fantrax pool (canonical) + API-Football stats
     + ADP (from online drafts), plus live Sleeper enrichment.
@@ -873,6 +972,7 @@ def fetch_sources(fantrax_path: str = "data/fantrax_players_2025.csv",
     apif_lookup = build_apif_lookup(load_pl_stats(stats_path))
     adp_lookup  = load_adp(adp_path)
     consensus_lookup = load_consensus(consensus_path)
+    overrides_lookup = load_overrides(overrides_path)
 
     sleeper_lookup: Optional[dict] = None
     sleeper_loaded = False
@@ -890,6 +990,7 @@ def fetch_sources(fantrax_path: str = "data/fantrax_players_2025.csv",
         "apif_lookup":     apif_lookup,
         "adp_lookup":      adp_lookup,
         "consensus_lookup": consensus_lookup,
+        "overrides":        overrides_lookup,
         "sleeper_lookup":  sleeper_lookup,
         "fantrax_loaded":  bool(fantrax_players),
         "apif_loaded":     bool(apif_lookup),
@@ -903,7 +1004,7 @@ def build_from_sources(sources: dict) -> dict:
     player_data = build_player_stats(
         sources["fantrax_players"], sources.get("adp_lookup"),
         sources.get("sleeper_lookup"), sources.get("apif_lookup"),
-        sources.get("consensus_lookup"),
+        sources.get("consensus_lookup"), sources.get("overrides"),
     )
     # Validate the stat feed reproduces Fantrax's own points (Sleeper preferred).
     validation = None
@@ -924,6 +1025,9 @@ def build_from_sources(sources: dict) -> dict:
         "adp_players":     adp_players,
         "adp_drafts":      total_drafts,
         "consensus_players": sum(1 for d in player_data.values() if d.get("consensus") is not None),
+        "board_players":   sum(1 for d in player_data.values() if d.get("board_rank") is not None),
+        "override_players": sum(1 for d in player_data.values() if d.get("my_rank") is not None),
+        "off_pool_players": sum(1 for d in player_data.values() if not d.get("in_pool", True)),
         "num_players":     len(player_data),
     }
 
@@ -964,6 +1068,9 @@ class DraftState:
         self.adp_players     = 0
         self.adp_drafts      = 0
         self.consensus_players = 0
+        self.board_players     = 0
+        self.override_players  = 0
+        self.off_pool_players  = 0
         self.validation: Optional[dict] = None
 
         # overall_pick_number → {"key": player_key, "slot": int}
@@ -981,6 +1088,9 @@ class DraftState:
         self.adp_players     = db.get("adp_players", 0)
         self.adp_drafts      = db.get("adp_drafts", 0)
         self.consensus_players = db.get("consensus_players", 0)
+        self.board_players     = db.get("board_players", 0)
+        self.override_players  = db.get("override_players", 0)
+        self.off_pool_players  = db.get("off_pool_players", 0)
         self.validation      = db.get("validation")
 
     # -- board geometry -------------------------------------------------
@@ -1033,12 +1143,16 @@ class DraftState:
     def get_available(self, position: Optional[str] = None,
                       sort_by: str = "projected_pts") -> list[dict]:
         drafted = self.drafted_keys
-        key = sort_by if sort_by in ("projected_pts", "ppg", "total_pts") else "projected_pts"
         out = [
             {**d, "_key": k}
             for k, d in self.player_data.items()
             if k not in drafted and (position is None or d["position"] == position)
         ]
+        if sort_by == "board_rank":
+            # Ascending: pick 1 is best. Players with no board rank go last.
+            return sorted(out, key=lambda x: (x.get("board_rank") is None,
+                                              x.get("board_rank") or 0))
+        key = sort_by if sort_by in ("projected_pts", "ppg", "total_pts") else "projected_pts"
         return sorted(out, key=lambda x: x.get(key) or 0, reverse=True)
 
     def get_my_picks(self) -> list[dict]:

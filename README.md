@@ -29,31 +29,41 @@ projects 2026/27 fantasy points under Fantrax scoring and helps you draft.
   higher risk (shared surnames first), and the top players missing a Sleeper join
   by GW played, to catch name-join bugs.
 
-## How projections work
+## How the draft list is built
 
-**25/26 points, PPG and positions are Fantrax's own final numbers**, read
-straight from the league export (`data/fantrax_players_2025.csv`) — no
-reconstruction, so the ranking table matches Fantrax exactly.
+The board is **consensus-driven — there is no points projection.** Each player's
+**Board** rank comes from:
 
-The **26/27 projection is bottom-up / per-stat**. For each player it takes every
-Opta per-90 rate from last season (goals, SoT, KP, tackles won, interceptions,
-clean sheets, …), regresses each rate toward its position mean — *volatile*
-stats (goals, penalties, cards, GK saves) shrink hard, *stable* volume stats
-(tackles, interceptions, aerials, passing actions) barely move — scales to
-expected minutes, and scores the result with Fantrax's rules:
+1. **Your override** (`data/my_overrides.csv`) if you've set one — always wins.
+2. Otherwise **real-draft ADP blended with the expert consensus**, where ADP is
+   weighted by how many drafts the player actually appeared in:
 
 ```
-rate_s        = stat_s / (minutes / 90)                        # per-90, last season
-blended_s     = (m90·rate_s + k_s·prior_rate_s) / (m90 + k_s)  # per-stat regression
-expected_90s  = 34 · participation,  participation = min(1, games/34)·min(1, starter_rate)  (floor 0.75 if games≥25)
-projected     = Σ_s  (blended_s · expected_90s) · fantrax_points_per_stat[s, position]
+board = (n_drafts · ADP  +  2 · consensus_rank) / (n_drafts + 2)
 ```
 
-`k_s` is the per-stat shrinkage in `draft_engine._SHRINK`. The bottom-up scoring
-was validated to reproduce Fantrax's own points (correlation ≈ 0.99 across all
-positions — run `validate.py`). Players without Sleeper stats fall back to a
-PPG-based projection (`proj_ppg`); each player's method is shown in the app's
-debug panel.
+So a player seen in 5 drafts is driven mostly by what drafters actually did,
+while someone seen once gets pulled toward the panel. Either source alone is used
+as-is.
+
+The list is **not gated on the Fantrax export** — anyone appearing in a draft or
+on the consensus board is included, so players missing from the export snapshot
+(e.g. Luka Vuskovic) still show up, flagged in the debug panel.
+
+Last season's Fantrax points/PPG are still displayed as **context only**; they do
+not affect the order.
+
+### Overriding a player
+
+`data/my_overrides.csv`:
+
+```csv
+Name,Rank,Note
+Luka Vuskovic,110,Like him 100-120s
+```
+
+`Rank` is where you want them on your board. Re-run the app (or hit **Reload
+player DB**) to pick it up.
 
 ## Data sources
 
