@@ -1,219 +1,229 @@
 Name,ADP,Drafts,Min,Max
-Bruno Fernandes,1.4,5,1,2
-Erling Haaland,1.6,5,1,2
-Bukayo Saka,3.6,5,3,5
-Cole Palmer,4.8,5,3,6
-Antoine Semenyo,4.8,5,3,7
-Dominik Szoboszlai,5.0,5,4,6
-Florian Wirtz,7.8,5,7,9
-Joao Pedro,8.4,5,6,11
-Morgan Gibbs-White,10.0,5,7,12
-Jeremy Doku,10.2,4,8,14
-Alexander Isak,11.4,5,9,13
-Declan Rice,13.4,5,9,15
-Matheus Cunha,13.6,5,10,20
-Rayan Cherki,14.2,5,11,18
-Anton Stach,15.6,5,10,18
-Igor Thiago,15.8,5,13,18
-Morgan Rogers,16.6,5,14,22
-Rayan,19.4,5,8,25
-Pascal Gross,20.4,5,13,27
-Virgil van Dijk,20.6,5,18,27
-Mohammed Kudus,21.0,5,19,23
-Daniel Munoz,22.8,5,18,28
-Bryan Mbeumo,23.4,5,17,31
-James Tarkowski,23.6,5,13,30
-Gabriel Magalhaes,24.6,5,21,28
-Enzo Fernandez,26.4,5,23,29
-Pedro Porro,26.6,5,24,32
-Bruno Guimaraes,29.2,5,23,34
-Elliot Anderson,29.8,5,20,39
-Yankuba Minteh,30.8,5,28,35
-James Garner,31.2,5,23,38
-Martin Odegaard,32.4,5,22,44
-Ollie Watkins,35.4,5,32,39
-Cody Gakpo,35.6,5,29,45
-Viktor Gyokeres,37.2,5,26,45
-Iliman Ndiaye,38.0,5,35,43
-Dango Ouattara,38.4,5,33,49
-Marcus Tavernier,38.6,5,30,45
-Phil Foden,42.2,5,32,48
-Benjamin Sesko,42.4,5,22,58
-Patrick Dorgu,43.0,5,31,60
-Harry Wilson,45.2,5,38,50
-Pedro Neto,45.2,5,37,56
-Jurrien Timber,45.6,5,37,60
-Neco Williams,45.8,5,39,52
-Enzo Le Fee,46.4,5,38,57
-Ismaila Sarr,46.4,5,33,54
-Marc Guehi,48.2,5,36,63
-James Maddison,50.4,5,40,61
-James Hill,50.6,5,43,55
-Dominic Solanke,51.0,5,32,64
-Dominic Calvert-Lewin,52.4,5,45,59
-Kiernan Dewsbury-Hall,53.0,5,44,67
-Eli Kroupi,54.2,5,30,70
-Youri Tielemans,54.8,5,51,58
-Nico O'Reilly,57.2,5,40,71
-Jack Grealish,58.6,5,47,75
-Mikkel Damsgaard,59.4,5,51,68
-Amad Diallo,60.4,5,49,68
-Adrien Truffert,60.8,5,41,81
-Nordi Mukiele,62.0,5,52,76
-Milos Kerkez,62.6,5,57,68
-Kai Havertz,66.2,5,62,74
-Danny Ballard,67.0,5,40,81
-Jan-Paul van Hecke,67.2,5,54,89
-Matheus Nunes,68.0,5,54,78
-Lewis Hall,69.2,5,60,83
-Maxence Lacroix,69.4,5,61,83
-Antonee Robinson,71.0,5,53,89
-Kevin Schade,71.6,5,61,78
-Alex Iwobi,74.0,5,48,95
-Mateus Goncalo Espanha Fernandes,74.8,5,56,87
-Reece James,75.4,5,69,87
-Riccardo Calafiori,77.8,5,73,82
-Brian Brobbey,78.8,5,69,86
-Jean-Philippe Mateta,79.2,5,58,105
-Eberechi Eze,79.8,5,49,108
-Savio,81.0,5,71,90
-Josko Gvardiol,81.2,5,71,92
-Harvey Barnes,81.8,5,65,90
-Estevao,83.2,5,61,107
-Mathys Tel,83.6,5,64,98
-Alex Scott,84.2,5,66,100
-Kaoru Mitoma,87.8,5,73,99
-William Osula,90.4,5,52,113
-Evanilson,90.6,5,64,115
-Malick Thiaw,91.0,5,82,103
-Nick Woltemade,91.8,5,67,117
-Marcos Senesi,93.2,5,72,131
-Yeremy Pino,95.6,5,46,119
-John McGinn,95.6,5,85,114
-Michael Kayode,95.8,5,73,129
-Beto,95.8,4,12,138
+Erling Haaland,1.5,6,1,2
+Bruno Fernandes,1.5,6,1,2
+Bukayo Saka,3.7,6,3,5
+Dominik Szoboszlai,4.7,6,3,6
+Antoine Semenyo,5.0,6,3,7
+Cole Palmer,5.8,6,3,11
+Florian Wirtz,7.3,6,5,9
+Joao Pedro,8.3,6,6,11
+Morgan Gibbs-White,10.0,6,7,12
+Jeremy Doku,10.8,5,8,14
+Alexander Isak,11.0,6,9,13
+Declan Rice,12.3,6,7,15
+Matheus Cunha,13.8,6,10,20
+Rayan Cherki,14.2,6,11,18
+Anton Stach,15.0,6,10,18
+Igor Thiago,16.0,6,13,18
+Morgan Rogers,16.5,6,14,22
+Rayan,19.3,6,8,25
+Mohammed Kudus,21.2,6,19,23
+Pascal Gross,21.3,6,13,27
+Virgil van Dijk,21.8,6,18,28
+Bryan Mbeumo,23.7,6,17,31
+Daniel Munoz,23.8,6,18,29
+Gabriel Magalhaes,25.0,6,21,28
+Enzo Fernandez,25.0,6,18,29
+James Tarkowski,25.3,6,13,34
+Pedro Porro,26.2,6,24,32
+Bruno Guimaraes,27.7,6,20,34
+Yankuba Minteh,29.5,6,23,35
+Elliot Anderson,31.3,6,20,39
+James Garner,31.5,6,23,38
+Martin Odegaard,32.3,6,22,44
+Iliman Ndiaye,35.2,6,21,43
+Ollie Watkins,35.5,6,32,39
+Cody Gakpo,36.0,6,29,45
+Marcus Tavernier,37.2,6,30,45
+Dango Ouattara,37.8,6,33,49
+Viktor Gyokeres,38.5,6,26,45
+Benjamin Sesko,40.5,6,22,58
+Phil Foden,42.3,6,32,48
+Patrick Dorgu,44.5,6,31,60
+Jurrien Timber,44.7,6,37,60
+Enzo Le Fee,44.8,6,37,57
+Harry Wilson,45.3,6,38,50
+Neco Williams,45.5,6,39,52
+Pedro Neto,46.8,6,37,56
+Ismaila Sarr,48.2,6,33,57
+Marc Guehi,48.2,6,36,63
+James Maddison,48.8,6,40,61
+James Hill,49.2,6,42,55
+Dominic Calvert-Lewin,51.5,6,45,59
+Kiernan Dewsbury-Hall,55.2,6,44,67
+Dominic Solanke,57.0,6,32,87
+Nico O'Reilly,57.5,6,40,71
+Mikkel Damsgaard,57.7,6,49,68
+Amad Diallo,59.3,6,49,68
+Milos Kerkez,60.5,6,50,68
+Nordi Mukiele,61.0,6,52,76
+Jack Grealish,61.5,6,47,76
+Youri Tielemans,62.2,6,51,99
+Adrien Truffert,62.2,6,41,81
+Kai Havertz,65.8,6,62,74
+Danny Ballard,66.2,6,40,81
+Maxence Lacroix,66.7,6,53,83
+Matheus Nunes,66.7,6,54,78
+Jan-Paul van Hecke,68.2,6,54,89
+Lewis Hall,68.5,6,60,83
+Eli Kroupi,70.2,6,30,150
+Antonee Robinson,70.3,6,53,89
+Reece James,73.3,6,63,87
+Kevin Schade,73.5,6,61,83
+Mateus Goncalo Espanha Fernandes,74.7,6,56,87
+Riccardo Calafiori,76.5,6,70,82
+Brian Brobbey,77.0,6,68,86
+Josko Gvardiol,77.3,6,58,92
+Estevao,77.8,6,51,107
+Jean-Philippe Mateta,78.0,6,58,105
+Alex Iwobi,78.3,6,48,100
+Johan Manzambi,79.0,1,79,79
+Harvey Barnes,81.0,6,65,90
+Bazoumana Toure,82.0,1,82,82
+Savio,82.2,6,71,90
+Mathys Tel,82.7,6,64,98
+Eberechi Eze,82.8,6,49,108
+William Osula,85.5,6,52,113
+Alex Scott,85.7,6,66,100
+Kaoru Mitoma,87.3,6,73,99
+Malick Thiaw,88.3,6,75,103
+Evanilson,90.3,6,64,115
+Beto,94.6,5,12,138
+Jacquet,95.0,1,95,95
 Ryan Gravenberch,96.8,5,67,154
-Victor Munoz,97.0,5,83,121
-Jaidon Anthony,98.6,5,73,124
-Chris Richards,99.0,5,87,130
-Luka Vuskovic,99.0,5,83,121
-Alejandro Garnacho,99.2,4,88,104
-Sven Botman,99.8,5,90,123
-Jeremie Frimpong,101.8,5,86,112
-Rio Ngumoha,105.2,5,88,119
-Harry Maguire,106.0,5,85,137
-Oliver McBurnie,107.6,5,79,138
-Igor Jesus,108.6,5,99,119
+Luka Vuskovic,96.8,6,83,121
+Michael Kayode,97.0,6,73,129
+Nick Woltemade,97.7,6,67,127
+Yeremy Pino,99.2,6,46,119
+Sven Botman,99.3,6,90,123
+Chris Richards,99.5,6,87,130
+Jeremie Frimpong,100.8,6,86,112
+Rio Ngumoha,101.0,6,80,119
+John McGinn,101.0,6,85,128
+Jaidon Anthony,101.0,6,73,124
+Marcos Senesi,101.3,6,72,142
+Alejandro Garnacho,101.8,5,88,112
+Victor Munoz,103.0,6,83,133
+Harry Maguire,103.5,6,85,137
+Igor Jesus,104.5,6,84,119
+Levi Colwill,107.5,6,81,129
+Granit Xhaka,108.0,6,89,149
+Noah Okafor,108.2,6,71,140
 Noni Madueke,109.4,5,89,130
-Jorrel Hato,110.0,1,110,110
-Jack Hinshelwood,111.0,5,98,143
-Granit Xhaka,111.2,5,89,149
-Christos Tzolis,112.5,4,71,134
-Levi Colwill,112.8,5,96,129
-Diego Gomez,113.2,5,106,125
-Adam Wharton,113.6,5,101,140
-Jarrad Branthwaite,114.6,5,101,129
+Adam Wharton,112.2,6,101,140
+Jarrad Branthwaite,112.8,6,101,129
+Maxim De Cuyper,113.2,6,94,133
+Diego Gomez,113.3,6,106,125
+Jack Hinshelwood,113.5,6,98,143
+Christos Tzolis,113.6,5,71,134
 Omar Marmoush,114.8,4,54,139
-Noah Okafor,115.6,5,84,140
-Pascal Struijk,116.6,5,92,139
-Maxim De Cuyper,117.0,5,106,133
+Rayan Ait-Nouri,115.8,6,106,127
+Oliver McBurnie,116.2,6,79,159
+Pascal Struijk,116.3,6,92,139
+Justin Kluivert,116.7,6,96,144
 Chris Wood,117.0,3,60,158
-Rayan Ait-Nouri,117.2,5,106,127
-Justin Kluivert,119.8,5,96,144
+Abdul Fatawu,119.0,1,119,119
 Rodrigo Muniz,120.0,5,74,144
-Ola Aina,120.4,5,84,168
-Ian Maatsen,120.8,4,102,160
-Nilson Angulo,122.2,5,94,142
+Nilson Angulo,121.2,6,94,142
+Ian Maatsen,121.4,5,102,160
+Jorrel Hato,122.0,2,110,134
+Murillo,122.2,6,99,139
+Tyrick Mitchell,123.7,6,106,162
+Ola Aina,123.8,6,84,168
 Conor Gallagher,124.2,5,80,151
-Murillo,125.0,5,99,139
+Geovany Quenda,124.5,4,106,169
 Anthony Elanga,125.7,3,121,133
-Omar Alderete,126.0,5,95,175
-Tyrick Mitchell,127.2,5,107,162
 Ethan Ampadu,129.0,4,108,142
-Nikola Milenkovic,129.0,5,95,150
-Geovany Quenda,129.0,3,106,169
 Kevin,129.0,4,115,148
 Sandro Tonali,129.2,5,100,157
+Omar Alderete,129.3,6,95,175
 Leif Davis,130.0,5,105,156
 Danny Welbeck,130.0,4,120,140
+Oscar Bobb,130.4,5,107,180
+Sepp van den Berg,130.8,6,102,178
+Nikola Milenkovic,132.2,6,95,150
 Omari Hutchinson,132.6,5,105,151
-Sepp van den Berg,132.6,5,102,178
-Matty Cash,133.5,4,75,187
+Ferdi Kadioglu,133.3,6,123,167
 Lewis Miley,134.0,1,134,134
-Yoane Wissa,135.2,5,97,153
-Ferdi Kadioglu,135.4,5,125,167
-Kobbie Mainoo,135.8,5,113,156
+Yoane Wissa,134.7,6,97,153
+Kobbie Mainoo,134.8,6,113,156
 Marc Cucurella,136.0,1,136,136
-Oscar Bobb,136.2,4,112,180
+Ryan Sessegnon,136.0,1,136,136
 Hugo Ekitike,136.5,2,128,145
 Mats Wieffer,136.8,5,101,159
+Matty Cash,138.0,5,75,187
 Moises Caicedo,138.4,5,122,151
-Mathias Jensen,138.8,4,125,150
-Robin Roefs,139.4,5,103,174
+Mathias Jensen,138.4,5,125,150
+Robin Roefs,139.3,6,103,174
 Joshua King,141.0,1,141,141
 Nathan Collins,141.2,4,120,165
+David Raya,142.0,6,110,185
 James Justin,142.0,1,142,142
+Steur,143.0,1,143,143
 Tyrique George,144.5,2,112,177
 Keane Lewis-Potter,144.7,3,137,151
+Piero Hincapie,146.0,6,113,179
+Alexis Mac Allister,147.0,5,120,168
 Samuel Chukwueze,147.0,1,147,147
 Jaka Bijol,147.2,4,122,167
 Valentino Livramento,147.5,2,140,155
-David Raya,148.4,5,119,185
+Cristhian Mosquera,147.7,3,121,177
 Richarlison,148.5,2,135,162
-Alexis Mac Allister,148.8,4,120,168
+Destiny Udogie,149.0,5,126,184
 Dwight McNeil,149.0,2,141,157
 Callum Hudson-Odoi,149.3,3,113,179
-Piero Hincapie,149.4,5,113,179
 Diogo Dalot,149.5,4,121,174
+Jordan Pickford,149.8,6,120,184
 Trai Hume,150.5,2,131,170
 Jake O'Brien,151.5,2,148,155
 Ben Doak,152.0,1,152,152
 Tijjani Reijnders,152.0,2,145,159
-Destiny Udogie,152.5,4,126,184
+Gabriel Martinelli,152.0,4,144,168
 Lucas Bergvall,153.0,1,153,153
-Jaydee Canvot,154.7,3,146,164
-Gabriel Martinelli,154.7,3,144,168
+Bart Verbruggen,153.0,1,153,153
+Jaydee Canvot,153.8,4,146,164
+Marcus Rashford,154.0,1,154,154
 Christian Walton,155.0,1,155,155
-Jordan Pickford,155.8,5,129,184
+Bobby Thomas,155.8,5,125,180
 Haji Wright,156.0,2,146,166
 Dejan Kulusevski,157.0,4,135,190
 Jacob Murphy,157.0,1,157,157
 Jorgen Strand Larsen,157.0,1,157,157
+Marco Palestra,157.0,1,157,157
+Jaden Philogene,157.5,4,148,175
 Rodri,157.8,4,135,183
+Andrew Robertson,158.7,3,138,173
 Thierno Barry,159.0,2,149,169
-Jaden Philogene,159.3,3,148,175
 Emiliano Buendia,159.5,4,143,189
 Micky van de Ven,160.0,2,148,172
 Calvin Bassey,160.0,1,160,160
 Dan Ndoye,160.0,3,158,163
 Joao Gomes,160.0,2,150,170
-Cristhian Mosquera,161.0,2,145,177
+Jacob Ramsey,160.0,1,160,160
+Milan van Ewijk,160.5,4,131,176
 Luke Shaw,161.0,1,161,161
+Gianluigi Donnarumma,161.2,6,142,187
 Djed Spence,161.5,2,160,163
 Mason Mount,162.0,1,162,162
 Alisson,162.3,3,141,190
 Boubacar Kamara,163.0,1,163,163
-Bobby Thomas,163.5,4,132,180
-Gianluigi Donnarumma,164.4,5,142,187
 Matt O'Riley,165.0,2,159,171
 Georginio Rutter,165.0,1,165,165
+Caoimhin Kelleher,165.7,6,147,186
 William Saliba,166.5,4,132,188
 Ryan Giles,167.0,1,167,167
-Andrew Robertson,169.0,2,165,173
-Caoimhin Kelleher,169.4,5,151,186
+James Trafford,168.2,4,149,185
+Djordje Petrovic,168.5,4,149,191
 Dara O'Shea,170.0,1,170,170
-Milan van Ewijk,170.3,3,160,176
 Nick Pope,171.0,3,144,188
 Andrey Santos,171.0,2,160,182
 Emiliano Martinez,171.5,2,155,188
 Mohamed Belloumi,171.5,2,154,189
-James Trafford,171.7,3,149,185
 Carlos Alcaraz,172.0,1,172,172
+Senne Lammens,172.4,5,154,191
 Max Dowman,173.0,3,153,189
 Dan Burn,173.0,1,173,173
-Djordje Petrovic,175.0,3,154,191
 Yasin Ayari,175.0,3,164,182
-Senne Lammens,176.8,4,154,191
 Alex Jimenez,178.0,1,178,178
 Vitalii Mykolenko,178.0,1,178,178
 Michael Keane,180.0,2,176,184
