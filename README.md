@@ -92,6 +92,21 @@ Luka Vuskovic,110,Like him 100-120s
 reference note; it deliberately does *not* reorder the list, so Blend stays the
 pure pooled consensus. Re-run the app (or hit **Reload player DB**) to pick it up.
 
+### Exporting to Fantrax
+
+Fantrax's **Import rankings** dialog takes a two-column, header-less CSV
+(`<First name> <Last name>`, `<Team abbreviation>` — the first format option).
+Generate it from the current board:
+
+```bash
+python export_fantrax_rankings.py        # all ranked players
+python export_fantrax_rankings.py 150    # top 150 only
+```
+
+Writes `fantrax_rankings_import.csv` in Blend order. Names and team codes come
+from the Fantrax export, so they match Fantrax's own spelling. Note the import
+**replaces** any existing rankings in Fantrax.
+
 ## Data sources
 
 | Source | Used for | Notes |

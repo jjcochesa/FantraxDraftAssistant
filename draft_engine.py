@@ -925,6 +925,7 @@ def build_player_stats(
             "name":            fx["name"],
             "web_name":        fx["name"].split()[-1],
             "team":            fx["team"],
+            "team_code":       fx.get("team_code") or "",
             "position":        pos,
             "total_pts":       fx["total_pts"],
             "ppg":             ppg,
