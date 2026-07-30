@@ -34,6 +34,12 @@ def _read_draft(path: Path) -> list[str]:
         s = line.strip()
         if not s or s.startswith("#"):
             continue
+        # "?" holds a pick slot without naming anyone — used when a board entry
+        # is unreadable. It keeps every later pick number correct, which simply
+        # deleting the line would not.
+        if s.startswith("?"):
+            names.append(None)
+            continue
         # tolerate "12. Player Name" or "12) Player" or "Player Name" formats
         for sep in (". ", ") ", "\t", ",", " - "):
             if sep in s and s.split(sep, 1)[0].strip().rstrip(".)").isdigit():
@@ -66,6 +72,8 @@ def main() -> None:
     unmatched: dict[str, int] = {}
     for f in draft_files:
         for pick_no, raw_name in enumerate(_read_draft(f), start=1):
+            if raw_name is None:      # placeholder: holds the slot, records nothing
+                continue
             hit, _ = de.match_entry(raw_name, pool_lookup)
             name = hit["name"] if hit else raw_name.strip()
             if not hit:

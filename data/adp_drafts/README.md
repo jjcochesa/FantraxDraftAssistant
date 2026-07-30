@@ -8,6 +8,9 @@ root to (re)build `data/adp.csv`, which the app reads as its ADP source.
 - **One `.txt` file per draft.** Name them however (`draft_01.txt`, `espn_mock.txt`).
 - **One player per line, in pick order** — pick 1 on the first line, pick 2 next, etc.
 - Blank lines and lines starting with `#` are ignored (use `#` for notes).
+- A line starting with `?` **holds a pick slot without naming anyone** — use it
+  when a board entry is unreadable. Deleting the line instead would shift every
+  later pick number up by one and corrupt those players' ADP.
 - A leading number is fine and stripped: `1. Bruno Fernandes`, `24) Saka`, or just `Bruno Fernandes` all work.
 - Names only have to be *close* — they're matched to the Fantrax pool with the
   same accent-stripping / first-name+surname matcher the app uses.
