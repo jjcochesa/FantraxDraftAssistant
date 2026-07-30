@@ -10,9 +10,9 @@ projects 2026/27 fantasy points under Fantrax scoring and helps you draft.
 
 ## Features
 
-- **Rankings** — every player projected for 26/27 under Fantrax scoring, with
-  25/26 totals, PPG and a toggleable per-stat detail view. Name column is
-  frozen on horizontal scroll.
+- **Rankings** — the consensus draft list, with a frozen **Pick** column marking
+  the rows that land on your own snake picks (set league size + slot in the
+  sidebar), plus tiers, positional ranks and a toggleable per-stat detail view.
 - **Auto-rank** — one click turns the projection model into a draft-order (DP)
   list you can hand-edit in the sidebar; DP-ranked players float to the top of
   every table.

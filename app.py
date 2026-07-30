@@ -208,26 +208,6 @@ c2.metric("Drafted", len(ds.picks))
 c3.metric("Available", available_count)
 c4.metric("My Slot", f"{_slot} of {_n}")
 
-# Your picks, highlighted — the ones still to come are emphasised.
-_done = ds.current_pick
-_chips = []
-for i, pk in enumerate(my_picks_all, 1):
-    if pk < _done:
-        _chips.append(f"<span style='opacity:.35'>R{i}·{pk}</span>")
-    elif pk == _done:
-        _chips.append(f"<span style='background:#1a472a;color:#a8e6a3;"
-                      f"padding:2px 7px;border-radius:4px;font-weight:700'>"
-                      f"R{i}·{pk} ← NOW</span>")
-    else:
-        _chips.append(f"<span style='background:#26324a;color:#cfe0ff;"
-                      f"padding:2px 7px;border-radius:4px'>R{i}·{pk}</span>")
-st.markdown(
-    "**Your picks:** " + " ".join(_chips),
-    unsafe_allow_html=True,
-)
-st.caption(f"Slot {_slot} of {_n}, {_r} rounds · snake order, so your gap "
-           f"alternates between {min(2*(_n-_slot)+1, 2*_slot-1)} and "
-           f"{max(2*(_n-_slot)+1, 2*_slot-1)} picks.")
 st.divider()
 
 
@@ -245,12 +225,17 @@ DETAIL_FIELDS = [
 ]
 
 
-def _rankings_df(players: list[dict], detail: bool) -> pd.DataFrame:
+def _rankings_df(players: list[dict], detail: bool,
+                 pick_rows: dict[int, str] | None = None) -> pd.DataFrame:
+    """Build the rankings table. ``pick_rows`` maps a 1-based row number to a
+    label, used to mark the rows that land on your own snake picks."""
+    pick_rows = pick_rows or {}
     rows = []
     for p in players:
         norm = _norm_name(p["name"])
         _pr, _t = p.get("pos_rank"), p.get("tier")
         row = {
+            "Pick":       pick_rows.get(len(rows) + 1),
             "Blend":      p.get("blend"),
             "Name":       p["name"],
             "Tier":       (f"{POS_LABELS.get(p['position'])}{_t}" if _t else None),
@@ -280,6 +265,7 @@ def _rankings_df(players: list[dict], detail: bool) -> pd.DataFrame:
 
 def _rankings_column_config(detail: bool) -> dict:
     cfg = {
+        "Pick":       st.column_config.TextColumn("Pick", pinned="left", width="small", help="Your snake picks — this row is roughly who should be available then"),
         "Name":       st.column_config.TextColumn("Name", pinned="left", width="medium"),
         "25/26 Pts":  st.column_config.NumberColumn("25/26 Pts", format="%.1f"),
         "PPG":        st.column_config.NumberColumn("PPG", format="%.2f"),
@@ -474,10 +460,16 @@ with tab_ranks:
     if not available:
         st.info("No players available for this filter.")
     else:
-        df = _rankings_df(available, show_detail)
+        _pick_rows = {pk: f"R{i}·{pk}" for i, pk in enumerate(my_picks_all, 1)}
+        df = _rankings_df(available, show_detail, _pick_rows)
         cfg = _rankings_column_config(show_detail)
         st.dataframe(df, width='stretch', column_config=cfg,
                      height=min(36 * len(df) + 40, 720))
+        st.caption(
+            f"**Pick** marks your own snake picks (slot {_slot} of {_n}). Since the "
+            "table is in draft order, the row your pick lands on is roughly who "
+            "should still be there — anything above it will likely be gone."
+        )
 
     st.caption(
         "**Blend** is the draft order: every board pooled — each real draft and each "
