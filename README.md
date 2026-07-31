@@ -103,9 +103,20 @@ python export_fantrax_rankings.py        # all ranked players
 python export_fantrax_rankings.py 150    # top 150 only
 ```
 
-Writes `fantrax_rankings_import.csv` in Blend order. Names and team codes come
-from the Fantrax export, so they match Fantrax's own spelling. Note the import
-**replaces** any existing rankings in Fantrax.
+Writes `fantrax_rankings_import.csv` in Blend order. Note the import **replaces**
+any existing rankings in Fantrax.
+
+**Name fixes** live in `data/fantrax_name_aliases.csv`. Fantrax's importer matches
+a player's *legal* name, not the display name in its own export — so "Savio" is
+rejected and has to be sent as "Savio Moreira de Oliveira". Columns:
+
+| Column | Meaning |
+| --- | --- |
+| `Name` | the name as it appears on our board |
+| `FantraxName` | what to write instead (blank = leave unchanged) |
+| `Exclude` | `Y` drops the player — used for anyone Fantrax reports as not eligible for the league |
+
+If an upload reports more "not found" names, add them here and re-run.
 
 ## Data sources
 
