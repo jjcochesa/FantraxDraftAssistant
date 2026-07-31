@@ -118,6 +118,20 @@ rejected and has to be sent as "Savio Moreira de Oliveira". Columns:
 
 If an upload reports more "not found" names, add them here and re-run.
 
+**Missing club codes:** a player who only appears in a real draft (no
+consensus-panel row) has no club anywhere in the data, and no club means the
+export silently skips them. Add them to `data/off_pool_teams.csv`:
+
+```csv
+Name,Team
+Marcus Rashford,MUN
+Joao Gomes,AVL
+```
+
+`Team` is a Fantrax club code. This only matters for **off-pool** players
+(missing from the Fantrax export snapshot) — anyone in the export already
+carries their club from there.
+
 ## Data sources
 
 | Source | Used for | Notes |

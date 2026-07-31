@@ -587,6 +587,30 @@ def load_overrides(path: str = "data/my_overrides.csv") -> dict[str, dict]:
     return lookup
 
 
+def load_team_overrides(path: str = "data/off_pool_teams.csv") -> dict[str, dict]:
+    """Load club codes for off-pool players the consensus sheet doesn't cover.
+
+    A player can enter the board via a real draft alone (no consensus row), in
+    which case there's nowhere to source a ``team_code`` from — and no team
+    code means the Fantrax export silently skips them. Columns: ``Name``,
+    ``Team`` (a code from ``_EPL_TEAM``). Returns {} when the file is absent.
+    """
+    p = Path(path)
+    if not p.exists():
+        return {}
+    lookup: dict[str, dict] = {}
+    last_seen: dict[str, set] = {}
+    with p.open(encoding="utf-8-sig", newline="") as fh:
+        for row in csv.DictReader(fh):
+            name = (row.get("Name") or "").strip()
+            team = (row.get("Team") or "").strip().upper()
+            if not name or not team:
+                continue
+            _index_entry(lookup, last_seen, name, {"team_code": team, "minutes": 1})
+    _flag_ambiguous(lookup, last_seen)
+    return lookup
+
+
 # Where an expert who left a player OUT of their top 150 is counted. Dropping
 # them entirely would bias the blend toward whichever experts happened to be
 # bullish; the source sheet uses a hard 200, which over-punishes. Just past the
@@ -776,6 +800,7 @@ def build_player_stats(
     apif_lookup:     Optional[dict] = None,
     consensus_lookup: Optional[dict] = None,
     overrides:        Optional[dict] = None,
+    team_overrides:   Optional[dict] = None,
 ) -> dict[str, dict]:
     """Build enriched records from the canonical Fantrax pool.
 
@@ -792,6 +817,7 @@ def build_player_stats(
     apif_lookup      = apif_lookup or {}
     consensus_lookup = consensus_lookup or {}
     overrides        = overrides or {}
+    team_overrides   = team_overrides or {}
 
     # Union the pool with everyone who appears in a draft or on the consensus
     # board. A player being drafted must never fall off the list just because the
@@ -808,6 +834,9 @@ def build_player_stats(
             disp = entry.get("display_name") or key.title()
             cons_e, _ = match_entry(disp, consensus_lookup)
             code = (cons_e or {}).get("team_code", "")
+            if not code:
+                team_e, _ = match_entry(disp, team_overrides)
+                code = (team_e or {}).get("team_code", "")
             pos  = (cons_e or {}).get("position", "") or "M"
             seen_extra.add(key)
             extra.append({
@@ -1074,6 +1103,7 @@ def fetch_sources(fantrax_path: str = "data/fantrax_players_2025.csv",
                   adp_path: str = "data/adp.csv",
                   consensus_path: str = "data/consensus_ranks.csv",
                   overrides_path: str = "data/my_overrides.csv",
+                  team_overrides_path: str = "data/off_pool_teams.csv",
                   sleeper_year: int = 2025) -> dict:
     """Load all inputs: the bundled Fantrax pool (canonical) + API-Football stats
     + ADP (from online drafts), plus live Sleeper enrichment.
@@ -1087,6 +1117,7 @@ def fetch_sources(fantrax_path: str = "data/fantrax_players_2025.csv",
     adp_lookup  = load_adp(adp_path)
     consensus_lookup = load_consensus(consensus_path)
     overrides_lookup = load_overrides(overrides_path)
+    team_overrides_lookup = load_team_overrides(team_overrides_path)
 
     sleeper_lookup: Optional[dict] = None
     sleeper_loaded = False
@@ -1105,6 +1136,7 @@ def fetch_sources(fantrax_path: str = "data/fantrax_players_2025.csv",
         "adp_lookup":      adp_lookup,
         "consensus_lookup": consensus_lookup,
         "overrides":        overrides_lookup,
+        "team_overrides":  team_overrides_lookup,
         "sleeper_lookup":  sleeper_lookup,
         "fantrax_loaded":  bool(fantrax_players),
         "apif_loaded":     bool(apif_lookup),
@@ -1119,6 +1151,7 @@ def build_from_sources(sources: dict) -> dict:
         sources["fantrax_players"], sources.get("adp_lookup"),
         sources.get("sleeper_lookup"), sources.get("apif_lookup"),
         sources.get("consensus_lookup"), sources.get("overrides"),
+        sources.get("team_overrides"),
     )
     # Validate the stat feed reproduces Fantrax's own points (Sleeper preferred).
     validation = None
