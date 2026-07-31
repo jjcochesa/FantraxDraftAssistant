@@ -40,8 +40,11 @@ def main() -> None:
         if not d.get("in_pool", True):
             off_pool.append(d["name"])
 
+    # Plain \n endings and no BOM. Python's csv default is \r\n; a naive parser
+    # that splits on \n would leave the \r stuck to the team code ("MUN\r") and
+    # fail every lookup.
     with open(OUT, "w", newline="", encoding="utf-8") as fh:
-        csv.writer(fh).writerows(rows)   # no header — the format is positional
+        csv.writer(fh, lineterminator="\n").writerows(rows)  # no header: positional format
 
     print(f"Wrote {OUT}: {len(rows)} players in Blend order")
     if skipped:
