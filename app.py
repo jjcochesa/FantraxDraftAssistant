@@ -59,9 +59,15 @@ def _get_draft_state(league_id: str, num_teams: int, num_rounds: int) -> DraftSt
 
 
 def _auto_dp_key(p: dict) -> tuple:
-    """Auto-rank order = the consensus draft board (ascending; unranked last)."""
-    br = p.get("board_rank")
-    return (br is None, br or 0.0)
+    """Auto-rank order = the consensus draft board (ascending; unranked last).
+
+    A player with a ``Rank`` in ``data/my_overrides.csv`` sorts at that pick
+    instead of their Blend. This moves them on YOUR board only — Blend itself
+    stays the pure pooled consensus, so the ⚠️ split flags still tell you
+    honestly when you're reaching.
+    """
+    key = p.get("my_rank") or p.get("board_rank")
+    return (key is None, key or 0.0)
 
 
 # Build the DB up front so DP-text mutations happen BEFORE the text_area widget
@@ -277,7 +283,7 @@ def _rankings_column_config(detail: bool) -> dict:
         "ADP":        st.column_config.NumberColumn("ADP", format="%.1f", help="Average draft position from the real drafts only"),
         "nD":         st.column_config.NumberColumn("nD", help="How many real drafts this player appeared in"),
         "Cons":       st.column_config.NumberColumn("Cons", format="%.1f", help="Expert panel's own aggregate rank (counts unranked as 200, so it reads harsher than Blend)"),
-        "Mine":       st.column_config.NumberColumn("Mine", format="%.1f", help="Your manual override (data/my_overrides.csv)"),
+        "Mine":       st.column_config.NumberColumn("Mine", format="%.1f", help="Your manual override (data/my_overrides.csv) — drives Auto-rank, not Blend"),
         "DP Rec":     st.column_config.NumberColumn("DP Rec", help="Your recommended draft order (sidebar)"),
     }
     return cfg
@@ -476,8 +482,8 @@ with tab_ranks:
         "expert's list counts as one vote (**nB** = how many). **ADP** is the real "
         "drafts alone (**nD** = how many), **Cons** is the panel's own aggregate. An "
         "expert who left a player outside their top 150 still counts, at ~175, so one "
-        "bullish ranking can't leapfrog the field. **Mine** shows your overrides for "
-        "reference — they no longer reorder the list. 25/26 Pts / PPG are last "
+        "bullish ranking can't leapfrog the field. **Mine** shows your overrides — they "
+        "leave Blend alone but do drive **Auto-rank**. 25/26 Pts / PPG are last "
         "season's actual Fantrax numbers, context only."
     )
 
@@ -493,7 +499,7 @@ with tab_ranks:
 | **ADP** | Average pick in the **real mock drafts only** — the best guide to *when he'll actually be gone*. |
 | **nD** | How many real drafts he appeared in. |
 | **Cons** | The expert panel's own published aggregate. Reads harsher than Blend because it counts "unranked" as 200. |
-| **Mine** | Your manual override from `data/my_overrides.csv` — shown for reference; it does not reorder the list. |
+| **Mine** | Your manual override from `data/my_overrides.csv`. It does **not** touch Blend — the consensus stays honest, so ⚠️ still tells you when you're reaching. It *does* set where **Auto-rank** puts them on your own DP board. |
 | **25/26 Pts / PPG / GW** | Last season's **actual** Fantrax output — context only, does not affect the order. |
 | **DP Rec** | Your hand-written draft order from the sidebar. |
 """)

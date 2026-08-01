@@ -59,7 +59,7 @@ leapfrog the field.
 | **ADP** | the real mock drafts alone |
 | **nD** | how many real drafts he appeared in |
 | **Cons** | the panel's own published aggregate (counts unranked as 200, so it reads harsher than Blend) |
-| **Mine** | your manual override — shown for reference only, it does not reorder the list |
+| **Mine** | your manual override — never touches Blend, but sets where **Auto-rank** places them on your own DP board |
 
 The list is **not gated on the Fantrax export** — anyone appearing in a draft or
 on the consensus board is included, so players missing from the export snapshot
@@ -85,12 +85,17 @@ rates him; negative means he falls past the panel's rank.
 
 ```csv
 Name,Rank,Note
-Luka Vuskovic,110,Like him 100-120s
+Johan Manzambi,60,Last tier-3 mid before the post-R6 thinning
 ```
 
-`Rank` is where you'd take them. This shows up in the **Mine** column as a
-reference note; it deliberately does *not* reorder the list, so Blend stays the
-pure pooled consensus. Re-run the app (or hit **Reload player DB**) to pick it up.
+`Rank` is where *you'd* take them. It shows in the **Mine** column and sets
+where **🤖 Auto-rank** places them in your DP list — so your personal board is
+durable and lives in git, not in a text area that dies with the session.
+
+It deliberately does **not** feed Blend. Blend stays the pure pooled consensus,
+which is what keeps the ⚠️ split flags meaningful: if you've moved someone 20
+picks up, the gap to Blend is exactly the reach you're taking, and the app can
+still tell you so. Re-run the app (or hit **Reload player DB**) to pick up edits.
 
 ### Exporting to Fantrax
 
