@@ -1,4 +1,5 @@
 # 12-team snake, 16 rounds. Owner = jjwas, slot 5. New mock, 2026-08-01.
+# NOTE: even rounds reversed to true pick order (board rows mirror on the snake).
 Bruno Fernandes
 E. Haaland
 D. Szoboszlai
@@ -11,18 +12,18 @@ F. Wirtz
 A. Isak
 J. Doku
 D. Rice
-Y. Minteh
-Rayan
-P. Gross
-B. Mbeumo
-V. van Dijk
-Daniel Munoz
-M. Rogers
-M. Kudus
-Igor Thiago
-Matheus Cunha
-R. Cherki
 A. Stach
+R. Cherki
+Matheus Cunha
+Igor Thiago
+M. Kudus
+M. Rogers
+Daniel Munoz
+V. van Dijk
+B. Mbeumo
+P. Gross
+Rayan
+Y. Minteh
 O. Watkins
 E. Fernandez
 J. Tarkowski
@@ -35,18 +36,18 @@ J. Garner
 E. Anderson
 D. Ouattara
 Bruno Guimaraes
-P. Dorgu
-Pedro Neto
-J. Hill
-P. Foden
-D. Calvert-Lewin
-Iliman Ndiaye
-Ismaila Sarr
-Neco Williams
-M. Guehi
-Harry Wilson
-Gabriel Magalhaes
 E. Le Fee
+Gabriel Magalhaes
+Harry Wilson
+M. Guehi
+Neco Williams
+Ismaila Sarr
+Iliman Ndiaye
+D. Calvert-Lewin
+P. Foden
+J. Hill
+Pedro Neto
+P. Dorgu
 K. Dewsbury-Hall
 N. Mukiele
 Johan Manzambi
@@ -59,18 +60,18 @@ J. Maddison
 J. Mateta
 B. Sesko
 M. Kerkez
-J. Timber
-A. Diallo
-Bazoumana Toure
-K. Havertz
-J. van Hecke
-E. Kroupi
-E. Eze
-A. Truffert
-D. Solanke
-M. Senesi
-Reece James
 Estevao
+Reece James
+M. Senesi
+D. Solanke
+A. Truffert
+E. Eze
+E. Kroupi
+J. van Hecke
+K. Havertz
+Bazoumana Toure
+A. Diallo
+J. Timber
 Lewis Hall
 Y. Tielemans
 C. Richards
@@ -83,18 +84,18 @@ M. Kayode
 J. Bijol
 M. Tel
 Victor Munoz
-K. Schade
-R. Gravenberch
-M. Thiaw
-K. Mitoma
-A. Iwobi
-A. Robinson
-J. Frimpong
-N. Okafor
-Evanilson
-Luka Vuskovic
-J. Gvardiol
 Y. Pino
+J. Gvardiol
+Luka Vuskovic
+Evanilson
+N. Okafor
+J. Frimpong
+A. Robinson
+A. Iwobi
+K. Mitoma
+M. Thiaw
+R. Gravenberch
+K. Schade
 Savio
 S. Botman
 W. Osula
@@ -107,18 +108,18 @@ T. Hume
 Y. Wissa
 H. Barnes
 Igor Jesus
-N. Madueke
-M. Wieffer
-I. Maatsen
-J. Hinshelwood
-Murillo
-O. Alderete
-Abdul Fatawu
-J. Kluivert
-Richarlison
-Christos Tzolis
-A. Wharton
 Tarik Muharemovic
+A. Wharton
+Christos Tzolis
+Richarlison
+J. Kluivert
+Abdul Fatawu
+O. Alderete
+Murillo
+J. Hinshelwood
+I. Maatsen
+M. Wieffer
+N. Madueke
 M. De Cuyper
 R. Roefs
 A. Mac Allister
@@ -131,18 +132,18 @@ L. Davis
 J. Trafford
 Diego Gomez
 D. Raya
-O. Hutchinson
-Rodrigo Muniz
-Rodri
-B. Brobbey
-L. Colwill
-O. McBurnie
-D. Burn
-R. Ait-Nouri
-S. Tonali
-L. Miley
-J. Branthwaite
 N. Woltemade
+J. Branthwaite
+L. Miley
+S. Tonali
+R. Ait-Nouri
+D. Burn
+O. McBurnie
+L. Colwill
+B. Brobbey
+Rodri
+Rodrigo Muniz
+O. Hutchinson
 S. van den Berg
 E. Ampadu
 M. Cash
@@ -155,18 +156,18 @@ B. Aaronson
 O. Bobb
 T. Mitchell
 E. Buendia
-Alejandro Garnacho
-F. Kadioglu
-H. Morita
-B. White
-N. Milenkovic
-D. Welbeck
-R. Giles
-Diogo Dalot
-G. Donnarumma
-Gabriel Martinelli
-G. Rutter
 D. Kulusevski
+G. Rutter
+Gabriel Martinelli
+G. Donnarumma
+Diogo Dalot
+R. Giles
+D. Welbeck
+N. Milenkovic
+B. White
+H. Morita
+F. Kadioglu
+Alejandro Garnacho
 S. Lukic
 B. Thomas
 M. Caicedo
@@ -179,15 +180,15 @@ C. Mosquera
 M. van Ewijk
 A. Robertson
 O. Aina
-R. Sessegnon
-C. Hudson-Odoi
-Emiliano Martinez
-S. Lammens
-B. Verbruggen
-Nathan Collins
-C. Kostoulas
-C. Kelleher
-H. Ekitike
-A. Khusanov
-Alisson
 Geovany Quenda
+Alisson
+A. Khusanov
+H. Ekitike
+C. Kelleher
+C. Kostoulas
+Nathan Collins
+B. Verbruggen
+S. Lammens
+Emiliano Martinez
+C. Hudson-Odoi
+R. Sessegnon

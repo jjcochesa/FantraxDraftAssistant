@@ -1,4 +1,5 @@
 # 12-team snake, 16 rounds. Owner = jjwas, slot 10. New mock, 2026-08-01.
+# NOTE: even rounds reversed to true pick order (board rows mirror on the snake).
 E. Haaland
 Bruno Fernandes
 B. Saka
@@ -11,18 +12,18 @@ Joao Pedro
 M. Gibbs-White
 J. Doku
 A. Isak
-Daniel Munoz
-Y. Minteh
-E. Fernandez
-B. Mbeumo
-V. van Dijk
-Rayan
-M. Kudus
-A. Stach
-Matheus Cunha
-Igor Thiago
-M. Rogers
 R. Cherki
+M. Rogers
+Igor Thiago
+Matheus Cunha
+A. Stach
+M. Kudus
+Rayan
+V. van Dijk
+B. Mbeumo
+E. Fernandez
+Y. Minteh
+Daniel Munoz
 C. Gakpo
 J. Tarkowski
 M. Odegaard
@@ -35,18 +36,18 @@ M. Tavernier
 Neco Williams
 Iliman Ndiaye
 D. Ouattara
-P. Dorgu
-J. Grealish
-V. Gyokeres
-K. Dewsbury-Hall
-D. Solanke
-Ismaila Sarr
-Pedro Neto
-O. Watkins
-Harry Wilson
-E. Anderson
-M. Guehi
 P. Foden
+M. Guehi
+E. Anderson
+Harry Wilson
+O. Watkins
+Pedro Neto
+Ismaila Sarr
+D. Solanke
+K. Dewsbury-Hall
+V. Gyokeres
+J. Grealish
+P. Dorgu
 B. Sesko
 D. Calvert-Lewin
 N. O'Reilly
@@ -59,18 +60,18 @@ J. Timber
 M. Lacroix
 J. Maddison
 Johan Manzambi
-A. Truffert
-M. Damsgaard
-J. Mateta
-K. Schade
-Jack Hinshelwood
-M. Kerkez
-Matheus Nunes
-Y. Tielemans
-R. Calafiori
-J. van Hecke
-A. Robinson
 J. Gvardiol
+A. Robinson
+J. van Hecke
+R. Calafiori
+Y. Tielemans
+Matheus Nunes
+M. Kerkez
+Jack Hinshelwood
+K. Schade
+J. Mateta
+M. Damsgaard
+A. Truffert
 D. Ballard
 Lewis Hall
 C. Richards
@@ -83,18 +84,18 @@ W. Osula
 Mateus Goncalo Espanha Fernandes
 N. Woltemade
 E. Eze
-N. Angulo
-R. Ngumoha
-A. Scott
-J. Frimpong
-H. Barnes
-M. Tel
-R. Gravenberch
-M. Senesi
-K. Mitoma
-Luka Vuskovic
-K. Havertz
 Estevao
+K. Havertz
+Luka Vuskovic
+K. Mitoma
+M. Senesi
+R. Gravenberch
+M. Tel
+H. Barnes
+J. Frimpong
+A. Scott
+R. Ngumoha
+N. Angulo
 S. Botman
 P. Struijk
 B. Brobbey
@@ -107,18 +108,18 @@ Bazoumana Toure
 J. McGinn
 G. Xhaka
 M. Kayode
-S. Tonali
-R. Ait-Nouri
-Omar Marmoush
-N. Madueke
-N. Okafor
-O. Alderete
-O. Mingueza
-Savio
-P. Hincapie
-Evanilson
-M. Wieffer
 Beto
+M. Wieffer
+Evanilson
+P. Hincapie
+Savio
+O. Mingueza
+O. Alderete
+N. Okafor
+N. Madueke
+Omar Marmoush
+R. Ait-Nouri
+S. Tonali
 D. Raya
 A. Wharton
 Jeremy Jacquet
@@ -131,18 +132,18 @@ S. Steur
 Tarik Muharemovic
 J. Pickford
 J. Kluivert
-Rodri
-C. Hudson-Odoi
-J. Branthwaite
-Y. Wissa
-J. Anthony
-S. van den Berg
-Diego Gomez
-Hayden Hackney
-H. Maguire
-Christos Tzolis
-Rodrigo Muniz
 B. Thomas
+Rodrigo Muniz
+Christos Tzolis
+H. Maguire
+Hayden Hackney
+Diego Gomez
+S. van den Berg
+J. Anthony
+Y. Wissa
+J. Branthwaite
+C. Hudson-Odoi
+Rodri
 E. Buendia
 E. Ampadu
 B. White
@@ -155,18 +156,18 @@ D. Kulusevski
 F. Kadioglu
 Alexis Mac Allister
 L. Colwill
-Marcus Rashford
-O. Bobb
-C. Wood
-G. Rutter
-Nathan Collins
-K. Mainoo
-Richarlison
-O. Hutchinson
-O. Aina
-M. Caicedo
-T. Hume
 T. Mitchell
+T. Hume
+M. Caicedo
+O. Aina
+O. Hutchinson
+Richarlison
+K. Mainoo
+Nathan Collins
+G. Rutter
+C. Wood
+O. Bobb
+Marcus Rashford
 Kevin
 Abdul Fatawu
 L. Miley
@@ -179,15 +180,15 @@ Alisson
 Boubacar Kamara
 L. Davis
 C. Gallagher
-E. Correia
-J. Canvot
-M. Sels
-Dean Henderson
-Haji Wright
-A. Elanga
-H. Ekitike
-Y. Ayari
-Geovany Quenda
-G. Donnarumma
-M. Belloumi
 J. Trafford
+M. Belloumi
+G. Donnarumma
+Geovany Quenda
+Y. Ayari
+H. Ekitike
+A. Elanga
+Haji Wright
+Dean Henderson
+M. Sels
+J. Canvot
+E. Correia

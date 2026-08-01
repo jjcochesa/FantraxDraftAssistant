@@ -1,4 +1,5 @@
 # 10-team snake, 16 rounds. Owner = jjwas, slot 2. New mock, 2026-08-01.
+# NOTE: even rounds reversed to true pick order (board rows mirror on the snake).
 Bruno Fernandes
 E. Haaland
 Cole Palmer
@@ -9,16 +10,16 @@ D. Szoboszlai
 Joao Pedro
 A. Isak
 J. Doku
-M. Rogers
-P. Gross
-B. Mbeumo
-A. Stach
-Igor Thiago
-Matheus Cunha
-R. Cherki
-Gabriel Magalhaes
-M. Gibbs-White
 D. Rice
+M. Gibbs-White
+Gabriel Magalhaes
+R. Cherki
+Matheus Cunha
+Igor Thiago
+A. Stach
+B. Mbeumo
+P. Gross
+M. Rogers
 P. Porro
 V. van Dijk
 Rayan
@@ -29,16 +30,16 @@ E. Fernandez
 Bruno Guimaraes
 M. Kudus
 J. Tarkowski
-Harry Wilson
-Neco Williams
-Ismaila Sarr
-D. Ouattara
-Iliman Ndiaye
-M. Odegaard
-J. Garner
-E. Anderson
-M. Tavernier
 C. Gakpo
+M. Tavernier
+E. Anderson
+J. Garner
+M. Odegaard
+Iliman Ndiaye
+D. Ouattara
+Ismaila Sarr
+Neco Williams
+Harry Wilson
 O. Watkins
 E. Le Fee
 J. Mateta
@@ -49,16 +50,16 @@ Pedro Neto
 N. O'Reilly
 J. Timber
 P. Foden
-Johan Manzambi
-M. Lacroix
-J. Bijol
-M. Damsgaard
-Matheus Nunes
-N. Mukiele
-P. Dorgu
-D. Calvert-Lewin
-J. Hill
 W. Osula
+J. Hill
+D. Calvert-Lewin
+P. Dorgu
+N. Mukiele
+Matheus Nunes
+M. Damsgaard
+J. Bijol
+M. Lacroix
+Johan Manzambi
 A. Truffert
 B. Sesko
 M. Senesi
@@ -69,16 +70,16 @@ E. Kroupi
 Mateus Goncalo Espanha Fernandes
 Bazoumana Toure
 C. Richards
-A. Scott
-J. van Hecke
-Tarik Muharemovic
-Luka Vuskovic
-Lewis Hall
-E. Eze
-A. Diallo
-M. Kerkez
-D. Solanke
 Y. Tielemans
+D. Solanke
+M. Kerkez
+A. Diallo
+E. Eze
+Lewis Hall
+Luka Vuskovic
+Tarik Muharemovic
+J. van Hecke
+A. Scott
 A. Robinson
 J. Hinshelwood
 Savio
@@ -89,16 +90,16 @@ R. Calafiori
 O. Bobb
 S. Botman
 M. Thiaw
-Abdul Fatawu
-J. McGinn
-K. Mitoma
-Estevao
-J. Grealish
-Marco Palestra
-J. Gvardiol
-Igor Jesus
-R. Gravenberch
 R. Ngumoha
+R. Gravenberch
+Igor Jesus
+J. Gvardiol
+Marco Palestra
+J. Grealish
+Estevao
+K. Mitoma
+J. McGinn
+Abdul Fatawu
 I. Maatsen
 B. Brobbey
 Y. Wissa
@@ -109,16 +110,16 @@ D. Raya
 M. Wieffer
 O. Aina
 D. Spence
-P. Struijk
-Murillo
-Christos Tzolis
-J. Kluivert
-G. Xhaka
-H. Maguire
-K. Schade
-H. Barnes
-Alejandro Garnacho
 N. Madueke
+Alejandro Garnacho
+H. Barnes
+K. Schade
+H. Maguire
+G. Xhaka
+J. Kluivert
+Christos Tzolis
+Murillo
+P. Struijk
 A. Wharton
 J. Anthony
 P. Hincapie
@@ -129,16 +130,16 @@ N. Woltemade
 M. Kayode
 J. Branthwaite
 C. Gallagher
-M. Cash
-S. Tonali
-L. Davis
-A. Robertson
-R. Roefs
-J. Trafford
-Victor Munoz
-Hayden Hackney
-D. Kulusevski
 Beto
+D. Kulusevski
+Hayden Hackney
+Victor Munoz
+J. Trafford
+R. Roefs
+A. Robertson
+L. Davis
+S. Tonali
+M. Cash
 A. Omur
 M. Caicedo
 Gabriel Martinelli
@@ -149,13 +150,13 @@ N. Angulo
 Y. Pino
 Evanilson
 G. Donnarumma
-Emiliano Martinez
-J. Pickford
-Alisson
-R. Ait-Nouri
-Nathan Collins
-F. Kadioglu
-Rodrigo Muniz
-D. Petrovic
-C. Kelleher
 T. Hume
+C. Kelleher
+D. Petrovic
+Rodrigo Muniz
+F. Kadioglu
+Nathan Collins
+R. Ait-Nouri
+Alisson
+J. Pickford
+Emiliano Martinez
