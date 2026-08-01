@@ -123,14 +123,16 @@ consensus-panel row) has no club anywhere in the data, and no club means the
 export silently skips them. Add them to `data/off_pool_teams.csv`:
 
 ```csv
-Name,Team
-Marcus Rashford,MUN
-Joao Gomes,AVL
+Name,Team,Position
+Marcus Rashford,MUN,M
+Tarik Muharemovic,LEE,D
 ```
 
-`Team` is a Fantrax club code. This only matters for **off-pool** players
+`Team` is a Fantrax club code; `Position` (G/D/M/F) is optional and only
+needed if the player isn't on the consensus panel either (unranked-but-drafted
+players default to M otherwise). This only matters for **off-pool** players
 (missing from the Fantrax export snapshot) — anyone in the export already
-carries their club from there.
+carries club and position from there.
 
 ## Data sources
 

@@ -588,12 +588,14 @@ def load_overrides(path: str = "data/my_overrides.csv") -> dict[str, dict]:
 
 
 def load_team_overrides(path: str = "data/off_pool_teams.csv") -> dict[str, dict]:
-    """Load club codes for off-pool players the consensus sheet doesn't cover.
+    """Load club codes (and optionally position) for off-pool players the
+    consensus sheet doesn't cover.
 
     A player can enter the board via a real draft alone (no consensus row), in
-    which case there's nowhere to source a ``team_code`` from — and no team
-    code means the Fantrax export silently skips them. Columns: ``Name``,
-    ``Team`` (a code from ``_EPL_TEAM``). Returns {} when the file is absent.
+    which case there's nowhere to source a ``team_code`` (or position) from —
+    and no team code means the Fantrax export silently skips them. Columns:
+    ``Name``, ``Team`` (a code from ``_EPL_TEAM``), optional ``Position``
+    (G/D/M/F — falls back to M if blank). Returns {} when the file is absent.
     """
     p = Path(path)
     if not p.exists():
@@ -604,9 +606,11 @@ def load_team_overrides(path: str = "data/off_pool_teams.csv") -> dict[str, dict
         for row in csv.DictReader(fh):
             name = (row.get("Name") or "").strip()
             team = (row.get("Team") or "").strip().upper()
+            pos  = (row.get("Position") or "").strip().upper()
             if not name or not team:
                 continue
-            _index_entry(lookup, last_seen, name, {"team_code": team, "minutes": 1})
+            _index_entry(lookup, last_seen, name,
+                        {"team_code": team, "position": pos, "minutes": 1})
     _flag_ambiguous(lookup, last_seen)
     return lookup
 
@@ -833,11 +837,9 @@ def build_player_stats(
                 continue
             disp = entry.get("display_name") or key.title()
             cons_e, _ = match_entry(disp, consensus_lookup)
-            code = (cons_e or {}).get("team_code", "")
-            if not code:
-                team_e, _ = match_entry(disp, team_overrides)
-                code = (team_e or {}).get("team_code", "")
-            pos  = (cons_e or {}).get("position", "") or "M"
+            team_e, _ = match_entry(disp, team_overrides)
+            code = (cons_e or {}).get("team_code", "") or (team_e or {}).get("team_code", "")
+            pos  = (cons_e or {}).get("position", "") or (team_e or {}).get("position", "") or "M"
             seen_extra.add(key)
             extra.append({
                 "fantrax_id": "", "name": disp, "team_code": code,
