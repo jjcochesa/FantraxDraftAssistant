@@ -49,6 +49,18 @@ def load_aliases(path: str = ALIASES) -> tuple[dict, set]:
     return alias, drop
 
 
+def _initial_only(name: str) -> bool:
+    """True for board names that never got a real first name ("D. Maeda").
+
+    Draft boards abbreviate, and a player absent from the Fantrax export has no
+    canonical spelling to recover it from. Fantrax matches on a full legal name,
+    so shipping one of these guarantees a "player not found" on import — better
+    to leave it out and say so than to pad the file with rows that fail.
+    """
+    head = name.split()[0] if name.split() else ""
+    return len(head.rstrip(".")) <= 1
+
+
 def main() -> None:
     limit = int(sys.argv[1]) if len(sys.argv) > 1 else None
 
@@ -60,7 +72,7 @@ def main() -> None:
 
     alias, drop = load_aliases()
 
-    rows, skipped, off_pool, renamed, dropped = [], [], [], [], []
+    rows, skipped, off_pool, renamed, dropped, partial = [], [], [], [], [], []
     for d in ranked:
         name = d["name"]
         if name in drop:
@@ -68,6 +80,9 @@ def main() -> None:
             continue
         if not d.get("team_code"):
             skipped.append(name)
+            continue
+        if _initial_only(name):
+            partial.append(f"{name} ({d['team_code']})")
             continue
         out_name = alias.get(name, name)
         if out_name != name:
@@ -89,6 +104,9 @@ def main() -> None:
         print(f"  {len(dropped)} dropped as ineligible: {', '.join(dropped)}")
     if skipped:
         print(f"  skipped {len(skipped)} with no team code: {', '.join(skipped)}")
+    if partial:
+        print(f"  held back {len(partial)} still on a board initial (need a full "
+              f"first name to match): {', '.join(partial)}")
     if off_pool:
         print(f"  {len(off_pool)} not in the Fantrax export, so the name may not "
               f"match on import: {', '.join(off_pool)}")
