@@ -203,6 +203,9 @@ def _index_entry(lookup: dict, last_seen: dict, name: str, entry: dict) -> None:
     n = _norm_name(name)
     toks = n.split()
     mins = entry.get("minutes", 0)
+    # Remember what this entry was indexed as, so the surname fallback can check
+    # first names even for sources whose rows carry no name field of their own.
+    entry.setdefault("_indexed_name", name)
     for v in _name_variants(name):
         prev = lookup.get(v)
         if prev is None or mins >= prev.get("minutes", 0):
@@ -225,11 +228,39 @@ def _flag_ambiguous(lookup: dict, last_seen: dict) -> None:
                 e["_ambiguous"] = True
 
 
+def _first_name_compatible(toks: list[str], entry: dict) -> bool:
+    """Guard the surname-only fallback against a DIFFERENT player who happens to
+    own a unique surname.
+
+    The ambiguity flag only catches surnames shared by two players already in
+    the source. It cannot catch a NEW player whose surname is unique there —
+    the fallback then hands back the incumbent. That is how "Mamadou Sangare",
+    a Brentford signing absent from the pool, silently resolved to Ibrahim
+    Sangare of Forest and would have taken his ADP with him.
+
+    Only the first INITIAL has to agree, not the whole first name. Board
+    transcriptions abbreviate ("M. Sels"), and first names arrive transliterated
+    or misread often enough that demanding equality would throw away good
+    matches — Vitaliy/Vitalii Mykolenko and Egor/Ehor Yarmolyuk are the same
+    players. A differing initial is the reliable signal of a different person.
+    """
+    if len(toks) < 2:
+        return True                    # bare surname — nothing to contradict
+    cand = _norm_name(entry.get("_indexed_name") or entry.get("name")
+                      or entry.get("display_name") or "")
+    cand_toks = cand.split()
+    if len(cand_toks) < 2:
+        return True                    # unknown/mononym candidate — can't judge
+    q_first, c_first = toks[0].rstrip("."), cand_toks[0]
+    return bool(q_first) and bool(c_first) and q_first[0] == c_first[0]
+
+
 def match_entry(name: str, lookup: dict) -> tuple[Optional[dict], str]:
     """Return (entry, match_type) for ``name`` against a source lookup.
 
     Tries full name, then "first last"; a surname-only fallback is used ONLY
-    when that surname is unambiguous. Returns (None, "none") otherwise.
+    when that surname is unambiguous AND the first names don't contradict.
+    Returns (None, "none") otherwise.
     """
     n = _norm_name(name)
     toks = n.split()
@@ -239,7 +270,7 @@ def match_entry(name: str, lookup: dict) -> tuple[Optional[dict], str]:
             return e, ("full" if v == n else "first+last")
     if toks:
         e = lookup.get(f"__last__{toks[-1]}")
-        if e is not None and not e.get("_ambiguous"):
+        if e is not None and not e.get("_ambiguous") and _first_name_compatible(toks, e):
             return e, "lastname"
     return None, "none"
 
