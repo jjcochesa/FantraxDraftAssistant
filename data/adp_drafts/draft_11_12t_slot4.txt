@@ -1,0 +1,194 @@
+# 12-team snake, 16 rounds. Owner = jjwas, slot 4. New mock, 2026-08-02.
+# Even rounds already stored in true pick order (board rows mirror on the snake).
+Bruno Fernandes
+E. Haaland
+B. Saka
+A. Semenyo
+D. Szoboszlai
+Cole Palmer
+Joao Pedro
+A. Isak
+F. Wirtz
+J. Doku
+M. Gibbs-White
+D. Rice
+R. Cherki
+Igor Thiago
+Matheus Cunha
+Rayan
+M. Rogers
+B. Mbeumo
+Y. Minteh
+A. Stach
+Gabriel Magalhaes
+Daniel Munoz
+E. Fernandez
+P. Porro
+M. Odegaard
+C. Gakpo
+O. Watkins
+D. Ouattara
+J. Tarkowski
+M. Tavernier
+M. Kudus
+V. van Dijk
+Ismaila Sarr
+P. Gross
+P. Foden
+Bruno Guimaraes
+J. Garner
+Neco Williams
+Pedro Neto
+Harry Wilson
+A. Diallo
+E. Le Fee
+E. Anderson
+Iliman Ndiaye
+V. Gyokeres
+Y. Tielemans
+M. Guehi
+D. Ballard
+N. Mukiele
+P. Dorgu
+J. Maddison
+M. Lacroix
+B. Sesko
+J. Hill
+Matheus Nunes
+A. Truffert
+Antonee Robinson
+N. O'Reilly
+D. Calvert-Lewin
+K. Dewsbury-Hall
+E. Kroupi
+M. Damsgaard
+Lewis Hall
+K. Schade
+Reece James
+Marco Palestra
+J. Timber
+D. Solanke
+Johan Manzambi
+K. Havertz
+M. Kerkez
+J. Mateta
+E. Eze
+A. Iwobi
+J. Grealish
+R. Calafiori
+N. Woltemade
+Estevao
+R. Gravenberch
+M. Mount
+K. Mitoma
+H. Barnes
+Mateus Goncalo Espanha Fernandes
+Victor Munoz
+M. Senesi
+Y. Pino
+M. Tel
+J. van Hecke
+M. Kayode
+A. Scott
+R. Ngumoha
+J. Gvardiol
+J. Hinshelwood
+C. Richards
+O. McBurnie
+J. Frimpong
+Luka Vuskovic
+N. Angulo
+Hayden Hackney
+Murillo
+S. Botman
+Christos Tzolis
+Evanilson
+J. Kluivert
+M. Wieffer
+J. Anthony
+M. Thiaw
+O. Alderete
+H. Maguire
+B. Thomas
+C. Gallagher
+Tarik Muharemovic
+Richarlison
+P. Struijk
+R. Ait-Nouri
+G. Xhaka
+W. Osula
+Igor Jesus
+Savio
+Abdul Fatawu
+Jeremy Jacquet
+D. Raya
+J. Branthwaite
+J. McGinn
+R. Roefs
+M. De Cuyper
+M. Belloumi
+P. Hincapie
+S. Tonali
+O. Aina
+L. Colwill
+C. Kelleher
+D. Maeda
+O. Mingueza
+Diego Gomez
+O. Hutchinson
+Dean Henderson
+N. Madueke
+Y. Wissa
+B. Brobbey
+N. Milenkovic
+N. Okafor
+Rodrigo Muniz
+Bazoumana Toure
+C. Wood
+Beto
+J. Bijol
+Alejandro Garnacho
+A. Wharton
+Diogo Dalot
+Sepp van den Berg
+Kevin
+E. Buendia
+Omar Marmoush
+H. Wright
+Rodri
+M. Cash
+S. Lukic
+C. Mosquera
+Nathan Collins
+A. Elanga
+Marcus Rashford
+G. Rutter
+D. Kulusevski
+Moises Caicedo
+M. Dowman
+E. Ampadu
+L. Davis
+J. Pickford
+D. Welbeck
+B. White
+J. Canvot
+T. Hume
+I. Maatsen
+Gabriel Martinelli
+D. Ndoye
+G. Donnarumma
+F. Kadioglu
+T. Mitchell
+A. Mac Allister
+K. Mainoo
+Jack Clarke
+O. Bobb
+J. Gittens
+B. Aaronson
+D. Petrovic
+S. Lammens
+C. Hudson-Odoi
+M. Sels
+J. Trafford
+M. Jensen
+C. Kostoulas
