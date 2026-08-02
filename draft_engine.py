@@ -587,6 +587,37 @@ def load_overrides(path: str = "data/my_overrides.csv") -> dict[str, dict]:
     return lookup
 
 
+def load_do_not_draft(path: str = "data/do_not_draft.csv") -> dict[str, dict]:
+    """Load your personal do-not-draft list.
+
+    Deliberately separate from the ``Exclude`` column in
+    ``fantrax_name_aliases.csv``: that one means "Fantrax rejects this player as
+    ineligible", this one means "he's draftable, I just don't want him". Keeping
+    them apart stops the exporter from reporting a personal fade as a league
+    eligibility error. Columns: ``Name``, optional ``Note``.
+
+    These players stay on the board with their real Blend — the consensus is
+    still worth seeing, and they keep contributing to other players' ADP — but
+    they're dropped from the Fantrax export and from Auto-rank.
+    """
+    p = Path(path)
+    if not p.exists():
+        return {}
+    lookup: dict[str, dict] = {}
+    last_seen: dict[str, set] = {}
+    with p.open(encoding="utf-8-sig", newline="") as fh:
+        for row in csv.DictReader(fh):
+            name = (row.get("Name") or "").strip()
+            if not name:
+                continue
+            _index_entry(lookup, last_seen, name, {
+                "note": (row.get("Note") or "").strip(),
+                "minutes": 1,
+            })
+    _flag_ambiguous(lookup, last_seen)
+    return lookup
+
+
 def load_team_overrides(path: str = "data/off_pool_teams.csv") -> dict[str, dict]:
     """Load club codes (and optionally position) for off-pool players the
     consensus sheet doesn't cover.
@@ -805,6 +836,7 @@ def build_player_stats(
     consensus_lookup: Optional[dict] = None,
     overrides:        Optional[dict] = None,
     team_overrides:   Optional[dict] = None,
+    do_not_draft:     Optional[dict] = None,
 ) -> dict[str, dict]:
     """Build enriched records from the canonical Fantrax pool.
 
@@ -822,6 +854,7 @@ def build_player_stats(
     consensus_lookup = consensus_lookup or {}
     overrides        = overrides or {}
     team_overrides   = team_overrides or {}
+    do_not_draft     = do_not_draft or {}
 
     # Union the pool with everyone who appears in a draft or on the consensus
     # board. A player being drafted must never fall off the list just because the
@@ -957,6 +990,9 @@ def build_player_stats(
         # left over the summer.
         t_ovr, _ = match_entry(fx["name"], team_overrides)
         code = (t_ovr or {}).get("team_code") or fx.get("team_code") or ""
+        dnd, dnd_mt = match_entry(fx["name"], do_not_draft)
+        if dnd_mt == "lastname":
+            dnd = None
         result[key] = {
             "name":            fx["name"],
             "web_name":        fx["name"].split()[-1],
@@ -994,6 +1030,8 @@ def build_player_stats(
             "adp_max":         adp["max_pick"] if adp else None,
             # Expert consensus board (data/consensus_ranks.csv)
             "in_pool":         fx.get("in_pool", True),
+            "do_not_draft":    dnd is not None,
+            "dnd_note":        (dnd or {}).get("note") or None,
             "my_rank":         (ovr or {}).get("my_rank"),
             "my_note":         (ovr or {}).get("note") or None,
             "consensus":       cons["consensus"]      if cons else None,
@@ -1111,6 +1149,7 @@ def fetch_sources(fantrax_path: str = "data/fantrax_players_2025.csv",
                   consensus_path: str = "data/consensus_ranks.csv",
                   overrides_path: str = "data/my_overrides.csv",
                   team_overrides_path: str = "data/off_pool_teams.csv",
+                  do_not_draft_path: str = "data/do_not_draft.csv",
                   sleeper_year: int = 2025) -> dict:
     """Load all inputs: the bundled Fantrax pool (canonical) + API-Football stats
     + ADP (from online drafts), plus live Sleeper enrichment.
@@ -1125,6 +1164,7 @@ def fetch_sources(fantrax_path: str = "data/fantrax_players_2025.csv",
     consensus_lookup = load_consensus(consensus_path)
     overrides_lookup = load_overrides(overrides_path)
     team_overrides_lookup = load_team_overrides(team_overrides_path)
+    do_not_draft_lookup   = load_do_not_draft(do_not_draft_path)
 
     sleeper_lookup: Optional[dict] = None
     sleeper_loaded = False
@@ -1144,6 +1184,7 @@ def fetch_sources(fantrax_path: str = "data/fantrax_players_2025.csv",
         "consensus_lookup": consensus_lookup,
         "overrides":        overrides_lookup,
         "team_overrides":  team_overrides_lookup,
+        "do_not_draft":    do_not_draft_lookup,
         "sleeper_lookup":  sleeper_lookup,
         "fantrax_loaded":  bool(fantrax_players),
         "apif_loaded":     bool(apif_lookup),
@@ -1158,7 +1199,7 @@ def build_from_sources(sources: dict) -> dict:
         sources["fantrax_players"], sources.get("adp_lookup"),
         sources.get("sleeper_lookup"), sources.get("apif_lookup"),
         sources.get("consensus_lookup"), sources.get("overrides"),
-        sources.get("team_overrides"),
+        sources.get("team_overrides"), sources.get("do_not_draft"),
     )
     # Validate the stat feed reproduces Fantrax's own points (Sleeper preferred).
     validation = None
@@ -1183,6 +1224,7 @@ def build_from_sources(sources: dict) -> dict:
         "max_boards":      max((d.get("n_boards") or 0 for d in player_data.values()), default=0),
         "override_players": sum(1 for d in player_data.values() if d.get("my_rank") is not None),
         "off_pool_players": sum(1 for d in player_data.values() if not d.get("in_pool", True)),
+        "dnd_players":     sum(1 for d in player_data.values() if d.get("do_not_draft")),
         "num_players":     len(player_data),
     }
 

@@ -97,6 +97,27 @@ which is what keeps the ⚠️ split flags meaningful: if you've moved someone 2
 picks up, the gap to Blend is exactly the reach you're taking, and the app can
 still tell you so. Re-run the app (or hit **Reload player DB**) to pick up edits.
 
+### Do-not-draft list
+
+`data/do_not_draft.csv` — players you never want, whatever the consensus says:
+
+```csv
+Name,Note
+Pedro Neto,
+Noni Madueke,
+```
+
+They stay **on the board** with their real Blend (worth seeing where the room
+values them, and they keep feeding everyone else's ADP), marked 🚫 in the
+Rankings table. They are dropped from **Auto-rank** and from the **Fantrax
+export**.
+
+This is deliberately separate from the `Exclude` column in
+`data/fantrax_name_aliases.csv`: that one means *Fantrax rejects this player as
+ineligible*, this one means *he's draftable, I just don't want him*. Keeping
+them apart stops the exporter from reporting a personal fade as a league
+eligibility error.
+
 ### Exporting to Fantrax
 
 Fantrax's **Import rankings** dialog takes a two-column, header-less CSV

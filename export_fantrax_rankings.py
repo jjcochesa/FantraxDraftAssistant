@@ -72,9 +72,12 @@ def main() -> None:
 
     alias, drop = load_aliases()
 
-    rows, skipped, off_pool, renamed, dropped, partial = [], [], [], [], [], []
+    rows, skipped, off_pool, renamed, dropped, partial, faded = [], [], [], [], [], [], []
     for d in ranked:
         name = d["name"]
+        if d.get("do_not_draft"):
+            faded.append(name)
+            continue
         if name in drop:
             dropped.append(name)
             continue
@@ -102,6 +105,8 @@ def main() -> None:
         print(f"  {len(renamed)} rewritten to their Fantrax legal name")
     if dropped:
         print(f"  {len(dropped)} dropped as ineligible: {', '.join(dropped)}")
+    if faded:
+        print(f"  {len(faded)} on your do-not-draft list: {', '.join(faded)}")
     if skipped:
         print(f"  skipped {len(skipped)} with no team code: {', '.join(skipped)}")
     if partial:

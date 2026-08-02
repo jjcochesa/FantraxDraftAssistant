@@ -76,7 +76,12 @@ def _auto_dp_key(p: dict) -> tuple:
 player_db = _load_player_db()
 
 if st.session_state.pop("_trigger_auto_dp", False):
-    ranked = sorted(player_db["player_data"].values(), key=_auto_dp_key)
+    # Do-not-draft players are left out entirely — a draft order that still
+    # recommends someone you've faded isn't a draft order.
+    ranked = sorted(
+        (p for p in player_db["player_data"].values() if not p.get("do_not_draft")),
+        key=_auto_dp_key,
+    )
     st.session_state["dp_rankings_text"] = "\n".join(
         p["name"] for p in ranked[:150] if p.get("name")
     )
@@ -243,7 +248,7 @@ def _rankings_df(players: list[dict], detail: bool,
         row = {
             "Pick":       pick_rows.get(len(rows) + 1),
             "Blend":      p.get("blend"),
-            "Name":       p["name"],
+            "Name":       ("🚫 " if p.get("do_not_draft") else "") + p["name"],
             "Tier":       (f"{POS_LABELS.get(p['position'])}{_t}" if _t else None),
             "PosRk":      (f"{p['position']}{_pr}" if _pr else None),
             "⚠":          "⚠️" if p.get("split") else None,
@@ -499,6 +504,7 @@ with tab_ranks:
 | **ADP** | Average pick in the **real mock drafts only** — the best guide to *when he'll actually be gone*. |
 | **nD** | How many real drafts he appeared in. |
 | **Cons** | The expert panel's own published aggregate. Reads harsher than Blend because it counts "unranked" as 200. |
+| **🚫** | On your do-not-draft list (`data/do_not_draft.csv`) — kept on the board so you can see where the room values him, but left out of Auto-rank and the Fantrax export. |
 | **Mine** | Your manual override from `data/my_overrides.csv`. It does **not** touch Blend — the consensus stays honest, so ⚠️ still tells you when you're reaching. It *does* set where **Auto-rank** puts them on your own DP board. |
 | **25/26 Pts / PPG / GW** | Last season's **actual** Fantrax output — context only, does not affect the order. |
 | **DP Rec** | Your hand-written draft order from the sidebar. |
