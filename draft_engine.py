@@ -952,11 +952,16 @@ def build_player_stats(
 
         vals = it["values"]
         key = fx["fantrax_id"] or _norm_name(fx["name"])
+        # A club override wins even for players already in the pool: the export
+        # is a season-old snapshot, so it still lists players at the club they
+        # left over the summer.
+        t_ovr, _ = match_entry(fx["name"], team_overrides)
+        code = (t_ovr or {}).get("team_code") or fx.get("team_code") or ""
         result[key] = {
             "name":            fx["name"],
             "web_name":        fx["name"].split()[-1],
-            "team":            fx["team"],
-            "team_code":       fx.get("team_code") or "",
+            "team":            _EPL_TEAM.get(code, fx["team"]),
+            "team_code":       code,
             "position":        pos,
             "total_pts":       fx["total_pts"],
             "ppg":             ppg,

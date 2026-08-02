@@ -152,9 +152,29 @@ carries club and position from there.
 
 (No FPL — this is a Fantrax app, so ADP comes from real Fantrax drafts, not FPL ownership.)
 
-**Refreshing the pool:** re-export the player list from Fantrax and overwrite
+**Refreshing the pool:** the pool is the canonical source for every player's
+name spelling, club and position, so a stale one is the root cause of most
+import failures — a player Fantrax added after the snapshot has no canonical
+name here. Either pull it live:
+
+```bash
+export FANTRAX_COOKIE='<paste the Cookie header>'   # or set it in secrets.toml
+python refresh_pool.py --dry-run                    # preview the diff
+python refresh_pool.py                              # write the pool
+python build_adp.py && python export_fantrax_rankings.py
+```
+
+(Cookie: DevTools → Network → any fantrax.com request → Request Headers →
+`Cookie`. The script refuses to overwrite unless a plausible pool comes back,
+so an expired session can't clobber a good file.)
+
+...or export the Players grid from Fantrax by hand and overwrite
 `data/fantrax_players_2025.csv` (columns `Player, Team, Position, RkOv, FPts,
 FP/G` are what the app reads).
+
+**Club changed over the summer?** The pool snapshot still lists players at the
+club they left. `data/off_pool_teams.csv` overrides the club for anyone, in the
+pool or not.
 
 **Sleeper field codes** (for the detail columns) are data-verified and differ
 from Sleeper's UI glossary: `cos` is **successful dribbles** (Opta "Contests
