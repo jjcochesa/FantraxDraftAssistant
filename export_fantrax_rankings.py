@@ -5,9 +5,10 @@ Fantrax's first import format is two positional columns and **no header**:
 
     <First name> <Last name>,<Team abbreviation>
 
-Rows are written in Blend order (best first), which is the ranking Fantrax will
-apply. Names and team codes come straight from the Fantrax export, so they match
-Fantrax's own spelling by construction.
+Rows are written in YOUR board order (best first) — Blend, except where
+my_overrides.csv sets a Rank — which is the ranking Fantrax will apply. Names
+and team codes come straight from the Fantrax export, so they match Fantrax's
+own spelling by construction.
 
 Usage:
     python export_fantrax_rankings.py            # -> fantrax_rankings_import.csv
@@ -65,8 +66,12 @@ def main() -> None:
     limit = int(sys.argv[1]) if len(sys.argv) > 1 else None
 
     db = de.fetch_player_db()["player_data"]
+    # Order by YOUR board, not the raw consensus: a Rank in my_overrides.csv
+    # wins over Blend, exactly as Auto-rank does. The point of importing
+    # rankings into Fantrax is to see your own board during the draft, so an
+    # override you set has to survive the trip.
     ranked = sorted((d for d in db.values() if d.get("blend") is not None),
-                    key=lambda d: d["blend"])
+                    key=lambda d: d.get("my_rank") or d["blend"])
     if limit:
         ranked = ranked[:limit]
 
@@ -100,7 +105,7 @@ def main() -> None:
     with open(OUT, "w", newline="", encoding="utf-8") as fh:
         csv.writer(fh, lineterminator="\n").writerows(rows)  # no header: positional format
 
-    print(f"Wrote {OUT}: {len(rows)} players in Blend order")
+    print(f"Wrote {OUT}: {len(rows)} players in board order (Blend, with my_overrides.csv Ranks applied)")
     if renamed:
         print(f"  {len(renamed)} rewritten to their Fantrax legal name")
     if dropped:

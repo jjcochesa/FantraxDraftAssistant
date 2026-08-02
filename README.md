@@ -129,8 +129,10 @@ python export_fantrax_rankings.py        # all ranked players
 python export_fantrax_rankings.py 150    # top 150 only
 ```
 
-Writes `fantrax_rankings_import.csv` in Blend order. Note the import **replaces**
-any existing rankings in Fantrax.
+Writes `fantrax_rankings_import.csv` in **your board order** — Blend, except
+where `my_overrides.csv` sets a Rank, so the board you upload is the same one
+Auto-rank builds. Do-not-draft players are left out. Note the import
+**replaces** any existing rankings in Fantrax.
 
 **Name fixes** live in `data/fantrax_name_aliases.csv`. Fantrax's importer matches
 a player's *legal* name, not the display name in its own export — so "Savio" is
