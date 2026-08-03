@@ -1,9 +1,9 @@
 # 12-team snake, 16 rounds. New mock, 2026-08-03.
 # Owner slot unknown — no jjwas column on this board.
 # Even rounds already stored in true pick order (board rows mirror on the snake).
-# NOTE: the board shows "M. Sangare (M-BRF)" at BOTH 11-2 (pick 122) and 11-10
-# (pick 130). A player cannot be drafted twice, so pick 130 is held with "?" —
-# it keeps every later pick number correct without inventing a second Sangare.
+# NOTE: the board showed "M. Sangare (M-BRF)" at BOTH 11-2 (pick 122) and 11-10
+# (pick 130) — a confirmed board glitch. Pick 122 is the real one; 130 is held
+# with "?" so every later pick number stays correct.
 Bruno Fernandes
 E. Haaland
 B. Saka
@@ -133,7 +133,7 @@ R. Roefs
 Victor Munoz
 S. Steur
 Tarik Muharemovic
-? board shows a second M. Sangare here - cannot be the same player twice
+? duplicate Sangare cell - confirmed board glitch, 122 is the real pick
 F. Kadioglu
 N. Milenkovic
 Marco Palestra
