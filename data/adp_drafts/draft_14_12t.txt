@@ -1,0 +1,198 @@
+# 12-team snake, 16 rounds. New mock, 2026-08-03.
+# Owner slot unknown — no jjwas column on this board.
+# Even rounds already stored in true pick order (board rows mirror on the snake).
+# NOTE: the board shows "M. Sangare (M-BRF)" at BOTH 11-2 (pick 122) and 11-10
+# (pick 130). A player cannot be drafted twice, so pick 130 is held with "?" —
+# it keeps every later pick number correct without inventing a second Sangare.
+Bruno Fernandes
+E. Haaland
+B. Saka
+Cole Palmer
+J. Doku
+D. Szoboszlai
+Joao Pedro
+A. Semenyo
+F. Wirtz
+M. Gibbs-White
+A. Isak
+Matheus Cunha
+R. Cherki
+B. Mbeumo
+Igor Thiago
+D. Rice
+A. Stach
+P. Gross
+Daniel Munoz
+Y. Minteh
+M. Kudus
+M. Rogers
+E. Fernandez
+Rayan
+P. Porro
+O. Watkins
+J. Tarkowski
+J. Garner
+C. Gakpo
+P. Foden
+M. Tavernier
+Gabriel Magalhaes
+M. Odegaard
+E. Anderson
+V. van Dijk
+Iliman Ndiaye
+D. Ouattara
+J. Hill
+Neco Williams
+Bruno Guimaraes
+Harry Wilson
+M. Guehi
+Pedro Neto
+D. Calvert-Lewin
+N. Mukiele
+V. Gyokeres
+B. Sesko
+Ismaila Sarr
+E. Le Fee
+D. Solanke
+N. O'Reilly
+K. Havertz
+J. Grealish
+A. Diallo
+P. Dorgu
+Johan Manzambi
+J. Timber
+M. Lacroix
+M. Damsgaard
+J. Maddison
+R. Calafiori
+D. Ballard
+J. van Hecke
+Matheus Nunes
+A. Truffert
+K. Dewsbury-Hall
+Y. Tielemans
+Antonee Robinson
+Lewis Hall
+J. Mateta
+E. Eze
+M. Kerkez
+K. Schade
+Reece James
+A. Iwobi
+Igor Jesus
+C. Richards
+E. Kroupi
+J. Kluivert
+Mateus Goncalo Espanha Fernandes
+S. Botman
+A. Scott
+K. Mitoma
+J. Gvardiol
+Estevao
+H. Maguire
+Luka Vuskovic
+Bazoumana Toure
+M. Senesi
+M. Thiaw
+N. Woltemade
+Diego Gomez
+M. Kayode
+J. Hinshelwood
+H. Barnes
+M. Tel
+Savio
+Marcus Rashford
+R. Ngumoha
+J. McGinn
+Beto
+J. Frimpong
+Evanilson
+Christos Tzolis
+N. Madueke
+B. Brobbey
+E. Ampadu
+A. Wharton
+Y. Wissa
+D. Raya
+J. Anthony
+Alejandro Garnacho
+Jeremy Jacquet
+L. Colwill
+M. Wieffer
+Diogo Dalot
+T. Mitchell
+J. Branthwaite
+R. Gravenberch
+M. De Cuyper
+Y. Pino
+Mamadou Sangare
+Hayden Hackney
+C. Wood
+R. Ait-Nouri
+R. Roefs
+Victor Munoz
+S. Steur
+Tarik Muharemovic
+? board shows a second M. Sangare here - cannot be the same player twice
+F. Kadioglu
+N. Milenkovic
+Marco Palestra
+D. Spence
+Murillo
+Abdul Fatawu
+W. Osula
+D. Welbeck
+O. McBurnie
+O. Bobb
+Andrey Santos
+O. Aina
+E. Mason-Clark
+S. Tonali
+L. Davis
+V. Barco
+Omar Marmoush
+M. Cash
+D. Kulusevski
+N. Angulo
+G. Xhaka
+Gabriel Martinelli
+O. Alderete
+Kevin
+M. Mount
+B. Thomas
+C. Hudson-Odoi
+A. Elanga
+Moises Caicedo
+Antonio Silva
+P. Hincapie
+P. Struijk
+D. Maeda
+J. O'Brien
+J. Bijol
+J. Justin
+T. Hume
+I. Maatsen
+G. Rutter
+A. Mac Allister
+M. Dowman
+L. Miley
+Y. Ayari
+Rodrigo Muniz
+Destiny Udogie
+Richarlison
+O. Hutchinson
+C. Kelleher
+Ruben Dias
+J. Pickford
+Rodri
+S. Adingra
+B. White
+Emiliano Martinez
+S. Lammens
+M. Sels
+E. Buendia
+A. Robertson
+D. Petrovic
+J. Trafford
+G. Donnarumma
+Alisson
