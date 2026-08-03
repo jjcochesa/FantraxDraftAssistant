@@ -88,9 +88,18 @@ Name,Rank,Note
 Johan Manzambi,60,Last tier-3 mid before the post-R6 thinning
 ```
 
-`Rank` is where *you'd* take them. It shows in the **Mine** column and sets
-where **🤖 Auto-rank** places them in your DP list — so your personal board is
-durable and lives in git, not in a text area that dies with the session.
+`Rank` is the **board position** you want them at — write 55 and they are the
+55th name in both Auto-rank and the Fantrax export, full stop.
+
+It is deliberately *not* compared against Blend, because the two are different
+scales. Blend is a mean pick across boards, and averaging compresses the middle:
+only ~85 players sit below a Blend of 100, so sorting `Rank,100` by value would
+place them at position 86, ~15 picks early. Positions are applied after the
+ineligible and faded players are dropped, so the number always matches the list
+you actually see.
+
+It shows in the **Mine** column, and living in git means your board survives the
+session.
 
 It deliberately does **not** feed Blend. Blend stays the pure pooled consensus,
 which is what keeps the ⚠️ split flags meaningful: if you've moved someone 20

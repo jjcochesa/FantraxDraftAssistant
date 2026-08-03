@@ -66,32 +66,35 @@ def main() -> None:
     limit = int(sys.argv[1]) if len(sys.argv) > 1 else None
 
     db = de.fetch_player_db()["player_data"]
-    # Order by YOUR board, not the raw consensus: a Rank in my_overrides.csv
-    # wins over Blend, exactly as Auto-rank does. The point of importing
-    # rankings into Fantrax is to see your own board during the draft, so an
-    # override you set has to survive the trip.
-    ranked = sorted((d for d in db.values() if d.get("blend") is not None),
-                    key=lambda d: d.get("my_rank") or d["blend"])
-    if limit:
-        ranked = ranked[:limit]
-
     alias, drop = load_aliases()
 
-    rows, skipped, off_pool, renamed, dropped, partial, faded = [], [], [], [], [], [], []
-    for d in ranked:
+    # Drop everything unexportable BEFORE ordering. A Rank in my_overrides.csv
+    # is a position in the file Fantrax receives, so it has to be applied to the
+    # rows that actually ship — otherwise stripping a player ranked above them
+    # slides everyone below up a line.
+    keep, skipped, off_pool, renamed, dropped, partial, faded = [], [], [], [], [], [], []
+    for d in db.values():
+        if d.get("blend") is None:
+            continue
         name = d["name"]
         if d.get("do_not_draft"):
             faded.append(name)
-            continue
-        if name in drop:
+        elif name in drop:
             dropped.append(name)
-            continue
-        if not d.get("team_code"):
+        elif not d.get("team_code"):
             skipped.append(name)
-            continue
-        if _initial_only(name):
+        elif _initial_only(name):
             partial.append(f"{name} ({d['team_code']})")
-            continue
+        else:
+            keep.append(d)
+
+    ranked = de.board_order(keep)
+    if limit:
+        ranked = ranked[:limit]
+
+    rows = []
+    for d in ranked:
+        name = d["name"]
         out_name = alias.get(name, name)
         if out_name != name:
             renamed.append(f"{name} -> {out_name}")

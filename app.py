@@ -18,6 +18,7 @@ Caching:
 import pandas as pd
 import streamlit as st
 
+import draft_engine as de
 from draft_engine import (
     DETAIL_STATS,
     DraftState,
@@ -58,18 +59,6 @@ def _get_draft_state(league_id: str, num_teams: int, num_rounds: int) -> DraftSt
     return DraftState(league_id, num_teams=num_teams, num_rounds=num_rounds)
 
 
-def _auto_dp_key(p: dict) -> tuple:
-    """Auto-rank order = the consensus draft board (ascending; unranked last).
-
-    A player with a ``Rank`` in ``data/my_overrides.csv`` sorts at that pick
-    instead of their Blend. This moves them on YOUR board only — Blend itself
-    stays the pure pooled consensus, so the ⚠️ split flags still tell you
-    honestly when you're reaching.
-    """
-    key = p.get("my_rank") or p.get("board_rank")
-    return (key is None, key or 0.0)
-
-
 # Build the DB up front so DP-text mutations happen BEFORE the text_area widget
 # (Streamlit forbids writing a widget-backed session_state key after its widget
 # exists).
@@ -78,9 +67,8 @@ player_db = _load_player_db()
 if st.session_state.pop("_trigger_auto_dp", False):
     # Do-not-draft players are left out entirely — a draft order that still
     # recommends someone you've faded isn't a draft order.
-    ranked = sorted(
-        (p for p in player_db["player_data"].values() if not p.get("do_not_draft")),
-        key=_auto_dp_key,
+    ranked = de.board_order(
+        [p for p in player_db["player_data"].values() if not p.get("do_not_draft")]
     )
     st.session_state["dp_rankings_text"] = "\n".join(
         p["name"] for p in ranked[:150] if p.get("name")
@@ -288,7 +276,7 @@ def _rankings_column_config(detail: bool) -> dict:
         "ADP":        st.column_config.NumberColumn("ADP", format="%.1f", help="Average draft position from the real drafts only"),
         "nD":         st.column_config.NumberColumn("nD", help="How many real drafts this player appeared in"),
         "Cons":       st.column_config.NumberColumn("Cons", format="%.1f", help="Expert panel's own aggregate rank (counts unranked as 200, so it reads harsher than Blend)"),
-        "Mine":       st.column_config.NumberColumn("Mine", format="%.1f", help="Your manual override (data/my_overrides.csv) — drives Auto-rank, not Blend"),
+        "Mine":       st.column_config.NumberColumn("Mine", format="%.1f", help="Your override (data/my_overrides.csv) — the board position you want them at, not a Blend value"),
         "DP Rec":     st.column_config.NumberColumn("DP Rec", help="Your recommended draft order (sidebar)"),
     }
     return cfg
@@ -505,7 +493,7 @@ with tab_ranks:
 | **nD** | How many real drafts he appeared in. |
 | **Cons** | The expert panel's own published aggregate. Reads harsher than Blend because it counts "unranked" as 200. |
 | **🚫** | On your do-not-draft list (`data/do_not_draft.csv`) — kept on the board so you can see where the room values him, but left out of Auto-rank and the Fantrax export. |
-| **Mine** | Your manual override from `data/my_overrides.csv`. It does **not** touch Blend — the consensus stays honest, so ⚠️ still tells you when you're reaching. It *does* set where **Auto-rank** puts them on your own DP board. |
+| **Mine** | Your manual override from `data/my_overrides.csv` — the **board position** you want them at (55 = the 55th name in Auto-rank and in the Fantrax export). It does **not** touch Blend, so ⚠️ still tells you honestly when you're reaching. |
 | **25/26 Pts / PPG / GW** | Last season's **actual** Fantrax output — context only, does not affect the order. |
 | **DP Rec** | Your hand-written draft order from the sidebar. |
 """)

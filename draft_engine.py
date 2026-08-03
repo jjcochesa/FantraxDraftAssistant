@@ -618,6 +618,31 @@ def load_overrides(path: str = "data/my_overrides.csv") -> dict[str, dict]:
     return lookup
 
 
+def board_order(players) -> list[dict]:
+    """Order players for YOUR board: Blend ascending, but anyone with a Rank in
+    ``my_overrides.csv`` is placed AT that board position.
+
+    Rank means "the pick where I'd take him", so it has to be a position in the
+    final list — NOT a number compared against Blend. The two are different
+    scales: Blend is a mean pick across boards, and averaging compresses the
+    middle, so only ~85 players sit below a Blend of 100. Sorting by the raw
+    value therefore put a player written as Rank 100 at position 86, roughly 15
+    picks earlier than intended.
+
+    Positions are applied in ascending Rank so each insertion lands at its final
+    index. Callers pass whatever set they're ordering (the export drops
+    ineligible and faded players first), so positions are always relative to the
+    list the user actually sees.
+    """
+    ranked = [p for p in players if p.get("blend") is not None]
+    out = sorted((p for p in ranked if not p.get("my_rank")),
+                 key=lambda p: p["blend"])
+    for p in sorted((p for p in ranked if p.get("my_rank")),
+                    key=lambda p: p["my_rank"]):
+        out.insert(max(0, min(len(out), int(p["my_rank"]) - 1)), p)
+    return out
+
+
 def load_do_not_draft(path: str = "data/do_not_draft.csv") -> dict[str, dict]:
     """Load your personal do-not-draft list.
 
